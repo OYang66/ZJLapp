@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:minHeight="48dp"
+    android:paddingStart="4dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="4dp">
+
+    <TextView
+        android:id="@+id/tvIndex"
+        android:layout_width="44dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:text="1"
+        android:textColor="#222222"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:background="#F2F2F2" />
+
+    <EditText
+        android:id="@+id/etWidth"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:background="@android:drawable/edit_text"
+        android:gravity="center"
+        android:hint="宽度"
+        android:imeOptions="flagNoExtractUi"
+        android:inputType="numberDecimal"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="#111111"
+        android:textColorHint="#888888"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/etModel"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1.5"
+        android:layout_marginStart="4dp"
+        android:background="@android:drawable/edit_text"
+        android:gravity="center"
+        android:hint="型号"
+        android:imeOptions="flagNoExtractUi"
+        android:inputType="text"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="#111111"
+        android:textColorHint="#888888"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/etLength"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:background="@android:drawable/edit_text"
+        android:gravity="center"
+        android:hint="长度"
+        android:imeOptions="flagNoExtractUi"
+        android:inputType="numberDecimal"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="#111111"
+        android:textColorHint="#888888"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/etQuantity"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:background="@android:drawable/edit_text"
+        android:gravity="center"
+        android:hint="数量"
+        android:imeOptions="flagNoExtractUi"
+        android:inputType="numberDecimal"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="#111111"
+        android:textColorHint="#888888"
+        android:textSize="14sp" />
+
+</LinearLayout>
