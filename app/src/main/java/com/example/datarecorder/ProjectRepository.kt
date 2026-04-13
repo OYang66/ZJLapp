@@ -11,7 +11,8 @@ class ProjectRepository(private val dao: ProjectDao) {
                 name = name,
                 buildingName = buildingName,
                 standardContent = "",
-                fastContent = ""
+                fastContent = "",
+                loadingContent = ""
             )
         )
     }
@@ -21,7 +22,8 @@ class ProjectRepository(private val dao: ProjectDao) {
         name: String,
         buildingName: String,
         standardContent: String,
-        fastContent: String
+        fastContent: String,
+        loadingContent: String
     ) {
         dao.update(
             ProjectEntity(
@@ -29,7 +31,8 @@ class ProjectRepository(private val dao: ProjectDao) {
                 name = name,
                 buildingName = buildingName,
                 standardContent = standardContent,
-                fastContent = fastContent
+                fastContent = fastContent,
+                loadingContent = loadingContent
             )
         )
     }
@@ -46,4 +49,3 @@ class ProjectRepository(private val dao: ProjectDao) {
         dao.delete(project)
     }
 }
-

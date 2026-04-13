@@ -1,10 +1,9 @@
 package com.example.datarecorder
 
-import android.content.Context
-import androidx.activity.result.contract.ActivityResultContracts
 import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
@@ -34,22 +33,24 @@ import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.datarecorder.model.AccountStatusRequest
 import com.example.datarecorder.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.apache.poi.ss.util.CellRangeAddress
 import org.json.JSONObject
 import java.io.File
-import androidx.core.content.ContextCompat
-import java.util.concurrent.Executors
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
@@ -60,11 +61,17 @@ class MainActivity : AppCompatActivity() {
     lateinit var btnModeToggle: Button
     var currentBuildingName: String = ""
     val packageDateMap = linkedMapOf<String, String>()
+    var pendingExportLoadingFileName: String? = null
+    var pendingExportLoadingBytes: ByteArray? = null
+    lateinit var loadingTable: TableLayout
+    lateinit var tvLoadingIronWeighbridge: TextView
+    var loadingAluminumUsePackageCount: Boolean = false
 
     lateinit var btnProjectMenu: Button
     lateinit var btnPackageMenu: Button
     lateinit var btnMore: Button
     lateinit var tvAvatar: TextView
+    lateinit var tvLoadingIronTotal: TextView
 
     lateinit var btnBackspace: Button
     lateinit var btnSpace: Button
@@ -92,15 +99,27 @@ class MainActivity : AppCompatActivity() {
     lateinit var btnFastBackspace: Button
 
     lateinit var layoutFastModel: GridLayout
+    lateinit var loadingModeContainer: LinearLayout
+
+    var currentModeType: ModeType = ModeType.STANDARD
+    var currentLoadingTripName: String = ""
+    var currentLoadingEditType: ReturnLoadingType = ReturnLoadingType.ALUMINUM
+    var currentLoadingEditIndex: Int = -1
+    var currentLoadingField: ReturnLoadingField = ReturnLoadingField.MATERIAL_NAME
+
+    val loadingTripMap = linkedMapOf<String, ReturnLoadingTripData>()
+    val loadingAluminumRows = mutableListOf<ReturnLoadingRow>()
+    val loadingIronRows = mutableListOf<ReturnLoadingRow>()
+    var vehicleInfo = VehicleInfo()
 
 
-    private lateinit var headerHorizontalScroll: HorizontalScrollView
-    private lateinit var bodyHorizontalScroll: HorizontalScrollView
-    private lateinit var bodyVerticalScroll: ScrollView
-    private lateinit var tableHeader: TableLayout
-    private lateinit var tableBody: TableLayout
-    private lateinit var tvSummaryPrimary: TextView
-    private lateinit var tvSummarySecondary: TextView
+    lateinit var headerHorizontalScroll: HorizontalScrollView
+    lateinit var bodyHorizontalScroll: HorizontalScrollView
+    lateinit var bodyVerticalScroll: ScrollView
+    lateinit var tableHeader: TableLayout
+    lateinit var tableBody: TableLayout
+    lateinit var tvSummaryPrimary: TextView
+    lateinit var tvSummarySecondary: TextView
 
     var isFastMode = false
     var currentProjectId: Long = 0L
@@ -156,6 +175,7 @@ class MainActivity : AppCompatActivity() {
             exportCurrentProjectToSelectedFolder(uri)
         }
 
+
     val modeNameStandard = "型号统计"
     val modeNameFast = "返厂统计"
 
@@ -209,6 +229,10 @@ class MainActivity : AppCompatActivity() {
     var pendingReplaceFastEditing = false
     var pendingReplaceCurrentFastModel = false
     var pendingReplaceCurrentStandardModel = false
+    lateinit var loadingTableHeader: TableLayout
+    lateinit var loadingHeaderHorizontalScroll: HorizontalScrollView
+    lateinit var loadingBodyHorizontalScroll: HorizontalScrollView
+    lateinit var loadingBodyVerticalScroll: ScrollView
 
     private val ids = listOf(
         R.id.btnModeToggle,
@@ -267,11 +291,14 @@ class MainActivity : AppCompatActivity() {
         initStandardCustomButtons()
         initStandardGroupArea()
         initFastModeArea()
+        initLoadingModeArea()
         updateAvatarView()
         updatePackageButtonText()
 
-        isFastMode = savedInstanceState?.getBoolean("is_fast_mode", false) ?: false
-        applyMode(isFastMode)
+        currentModeType = readLastModeType()
+        isFastMode = currentModeType == ModeType.FAST
+        switchMode(currentModeType)
+
 
         lifecycleScope.launch {
             loadLastProjectOrCreateDefault()
@@ -289,11 +316,33 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         autoSaveRunnable?.let { handler.removeCallbacks(it) }
         historyBackupRunnable?.let { handler.removeCallbacks(it) }
+
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                saveCurrentProjectContentNow()
+            }
+        }
+
+        saveHistoryBackupSnapshot()
+
         ioExecutor.shutdownNow()
         appUpdateManager.release()
         unregisterLogoutReceiverSafe()
         super.onDestroy()
     }
+
+
+
+    override fun onPause() {
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                saveCurrentProjectContentNow()
+            }
+        }
+        saveHistoryBackupSnapshot()
+        super.onPause()
+    }
+
 
 
 
@@ -303,9 +352,21 @@ class MainActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
     }
 
+
     private fun initViews() {
         tvProjectName = findViewById(R.id.tvProjectName)
         btnModeToggle = findViewById(R.id.btnModeToggle)
+        loadingModeContainer = findViewById(R.id.loadingModeContainer)
+        loadingTable = findViewById(R.id.loadingTable)
+        tvLoadingIronWeighbridge = findViewById(R.id.tvLoadingIronWeighbridge)
+        tvLoadingIronTotal = findViewById(R.id.tvLoadingIronTotal)
+        loadingTableHeader = findViewById(R.id.loadingTableHeader)
+        loadingHeaderHorizontalScroll = findViewById(R.id.loadingHeaderHorizontalScroll)
+        loadingBodyHorizontalScroll = findViewById(R.id.loadingBodyHorizontalScroll)
+        loadingBodyVerticalScroll = findViewById(R.id.loadingBodyVerticalScroll)
+        loadingTable = findViewById(R.id.loadingTable)
+
+
 
         btnProjectMenu = findViewById(R.id.btnProjectMenu)
         btnPackageMenu = findViewById(R.id.btnPackageMenu)
@@ -389,24 +450,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnModeToggle.setOnClickListener {
-            isFastMode = !isFastMode
-            applyMode(isFastMode)
+            showModeSwitchMenu(it)
         }
+
     }
 
     private fun applyMode(fast: Boolean) {
+        currentModeType = if (fast) ModeType.FAST else ModeType.STANDARD
         isFastMode = fast
-        clearStandardEditingState()
-        clearFastEditingState()
-        pendingReplaceStandardEditing = false
-        pendingReplaceFastEditing = false
-        pendingReplaceCurrentFastModel = false
-        pendingReplaceCurrentStandardModel = false
+
         standardModeContainer.visibility = if (fast) View.GONE else View.VISIBLE
         fastModeContainer.visibility = if (fast) View.VISIBLE else View.GONE
-        btnModeToggle.text = if (fast) modeNameStandard else modeNameFast
+        loadingModeContainer.visibility = View.GONE
+
+        btnModeToggle.text = "切换模式"
         updateDisplayTable()
     }
+
+
 
     private fun showProjectMenuPopup(anchor: View) {
         val popup = PopupMenu(this, anchor)
@@ -462,6 +523,7 @@ class MainActivity : AppCompatActivity() {
                     shareCurrentModeProject()
                     true
                 }
+
                 3 -> {
                     appUpdateManager.checkUpdate()
                     true
@@ -635,7 +697,7 @@ class MainActivity : AppCompatActivity() {
         loadPackageToScreen(packageName)
     }
 
-    private fun showPackageMenuPopup(anchor: View) {
+    fun MainActivity.showPackageMenuPopup(anchor: View) {
         if (currentProjectId <= 0L) {
             toast("请先新建或选择项目")
             return
@@ -644,19 +706,34 @@ class MainActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         var order = 0
 
-        getAllPackageNamesInOrder().forEachIndexed { index, packageName ->
-            popup.menu.add(0, 1000 + index, order++, packageName)
+        if (currentModeType == ModeType.RETURN_LOADING) {
+            loadingTripMap.keys.forEachIndexed { index, tripName ->
+                popup.menu.add(0, 1000 + index, order++, tripName)
+            }
+            popup.menu.add(0, 1, order, "增加车次")
+        } else {
+            getAllPackageNamesInOrder().forEachIndexed { index, packageName ->
+                popup.menu.add(0, 1000 + index, order++, packageName)
+            }
+            popup.menu.add(0, 1, order, "增加包号")
         }
-        popup.menu.add(0, 1, order, "增加包号")
 
         popup.setOnMenuItemClickListener { item ->
             when {
                 item.itemId == 1 -> {
-                    addNewPackage()
+                    if (currentModeType == ModeType.RETURN_LOADING) {
+                        addNewLoadingTrip()
+                    } else {
+                        addNewPackage()
+                    }
                     true
                 }
                 item.itemId >= 1000 -> {
-                    switchPackage(item.title.toString())
+                    if (currentModeType == ModeType.RETURN_LOADING) {
+                        switchLoadingTrip(item.title.toString())
+                    } else {
+                        switchPackage(item.title.toString())
+                    }
                     true
                 }
                 else -> false
@@ -1524,25 +1601,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-  fun updateDisplayTable() {
-        tableHeader.removeAllViews()
-        tableBody.removeAllViews()
+    fun updateDisplayTable() {
+        when (currentModeType) {
+            ModeType.FAST -> {
+                tableHeader.removeAllViews()
+                tableBody.removeAllViews()
+                renderFastTable()
+                tvSummaryPrimary.visibility = View.VISIBLE
+                tvSummarySecondary.visibility = View.VISIBLE
+                tvSummaryPrimary.text = "合计面积：${formatAreaSquareMeter(calculateFastTotalArea())}"
+                tvSummarySecondary.text = "合计数量：${calculateFastTotalQty()}"
+            }
 
-        if (isFastMode) {
-            renderFastTable()
-            tvSummaryPrimary.text = "合计面积：${formatAreaSquareMeter(calculateFastTotalArea())}"
-            tvSummarySecondary.visibility = View.VISIBLE
-            tvSummarySecondary.text = "合计数量：${calculateFastTotalQty()}"
-        } else {
-            renderStandardTable()
-            tvSummaryPrimary.text = "合计数量：${calculateStandardTotalQty()}"
-            tvSummarySecondary.visibility = View.GONE
+            ModeType.STANDARD -> {
+                tableHeader.removeAllViews()
+                tableBody.removeAllViews()
+                renderStandardTable()
+                tvSummaryPrimary.visibility = View.VISIBLE
+                tvSummarySecondary.visibility = View.GONE
+                tvSummaryPrimary.text = "合计数量：${calculateStandardTotalQty()}"
+            }
+
+            ModeType.RETURN_LOADING -> {
+                tvSummaryPrimary.visibility = View.VISIBLE
+                tvSummarySecondary.visibility = View.GONE
+                renderLoadingTable()
+            }
         }
 
         if (editingStandardRowIndex == null && editingFastRowIndex == null) {
             scrollDisplayToLatest()
         }
     }
+
 
     private fun renderStandardTable() {
         addTableHeader("序号", "安装编号", "型号", "数量")
@@ -1573,7 +1664,6 @@ class MainActivity : AppCompatActivity() {
             savedRowIndex = null
         )
     }
-
     private fun renderFastTable() {
         addTableHeader("序号", "宽度", "型号", "长度", "数量")
 
@@ -1604,7 +1694,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun addTableHeader(c1: String, c2: String, c3: String, c4: String, c5: String? = null) {
+
+    fun addTableHeader(c1: String, c2: String, c3: String, c4: String, c5: String? = null) {
         val row = TableRow(this)
         row.addView(createTableCell(c1, true))
         row.addView(createTableCell(c2, true))
@@ -1831,7 +1922,7 @@ class MainActivity : AppCompatActivity() {
         tableBody.addView(row)
     }
 
-    private fun createTableCell(
+    fun createTableCell(
         text: String,
         isHeader: Boolean,
         highlight: Boolean = false,
@@ -1956,6 +2047,17 @@ class MainActivity : AppCompatActivity() {
                     onClick(key)
                 }
             )
+        }
+    }
+    private fun readLastModeType(): ModeType {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val modeName = prefs.getString("last_mode_type", ModeType.STANDARD.name)
+            ?: ModeType.STANDARD.name
+
+        return try {
+            ModeType.valueOf(modeName)
+        } catch (_: Exception) {
+            if (prefs.getBoolean("is_fast_mode", false)) ModeType.FAST else ModeType.STANDARD
         }
     }
 
@@ -2112,17 +2214,22 @@ class MainActivity : AppCompatActivity() {
         json.put("savedAt", System.currentTimeMillis())
         json.put("standardContent", serializeStandardContent())
         json.put("fastContent", serializeFastContent())
+        json.put("loadingContent", serializeLoadingContent())
+        json.put("currentModeType", currentModeType.name)
         json.put("isFastMode", isFastMode)
         return json.toString()
     }
+
+
 
     private fun saveHistoryBackupSnapshot() {
         if (currentProjectId <= 0L) return
 
         val standardContent = serializeStandardContent()
         val fastContent = serializeFastContent()
+        val loadingContent = serializeLoadingContent()
 
-        if (standardContent.isBlank() && fastContent.isBlank()) return
+        if (standardContent.isBlank() && fastContent.isBlank() && loadingContent.isBlank()) return
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -2140,6 +2247,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
+
 
     private fun buildHistoryBackupFileName(projectName: String): String {
         val safeName = projectName.replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_")
@@ -2434,7 +2545,14 @@ class MainActivity : AppCompatActivity() {
                 val json = JSONObject(jsonText)
                 val standardContent = json.optString("standardContent", "")
                 val fastContent = json.optString("fastContent", "")
-                val backupFastMode = json.optBoolean("isFastMode", false)
+                val loadingContent = json.optString("loadingContent", "")
+                val modeName = json.optString("currentModeType", ModeType.STANDARD.name)
+
+                val backupMode = try {
+                    ModeType.valueOf(modeName)
+                } catch (_: Exception) {
+                    if (json.optBoolean("isFastMode", false)) ModeType.FAST else ModeType.STANDARD
+                }
 
                 withContext(Dispatchers.Main) {
                     clearStandardEditingState()
@@ -2448,6 +2566,7 @@ class MainActivity : AppCompatActivity() {
                     clearAllPackageMaps()
                     deserializePackageStandardContent(standardContent)
                     deserializePackageFastContent(fastContent)
+                    deserializeLoadingContent(loadingContent)
 
                     val allNames = linkedSetOf<String>()
                     allNames.addAll(packageStandardRowsMap.keys)
@@ -2460,20 +2579,41 @@ class MainActivity : AppCompatActivity() {
                         packageCurrentFastRowMap.putIfAbsent(name, FastRow())
                     }
 
-                    if (currentPackageName.isBlank() && allNames.isNotEmpty()) {
-                        currentPackageName = allNames.first()
-                    }
-
-                    if (currentPackageName.isBlank()) {
-                        resetForNewProjectWithoutPackage()
-                    } else {
+                    if (allNames.isNotEmpty()) {
+                        if (currentPackageName.isBlank() || !allNames.contains(currentPackageName)) {
+                            currentPackageName = allNames.first()
+                        }
                         loadPackageToScreen(currentPackageName)
                     }
 
-                    applyMode(backupFastMode)
+                    if (loadingTripMap.isNotEmpty()) {
+                        if (currentLoadingTripName.isBlank() || !loadingTripMap.containsKey(currentLoadingTripName)) {
+                            currentLoadingTripName = loadingTripMap.keys.first()
+                        }
+                        val trip = loadingTripMap[currentLoadingTripName]
+                        loadingAluminumRows.clear()
+                        loadingAluminumRows.addAll(trip?.aluminumRows ?: emptyList())
+                        loadingIronRows.clear()
+                        loadingIronRows.addAll(trip?.ironRows ?: emptyList())
+                        vehicleInfo = trip?.vehicleInfo ?: VehicleInfo()
+                    }
+
+                    when (backupMode) {
+                        ModeType.STANDARD -> switchMode(ModeType.STANDARD)
+                        ModeType.FAST -> switchMode(ModeType.FAST)
+                        ModeType.RETURN_LOADING -> switchMode(ModeType.RETURN_LOADING)
+                    }
+
                     updatePackageButtonText()
                     updateDisplayTable()
-                    saveCurrentProjectContent()
+                    renderLoadingTable()
+
+                    runCatching {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            saveCurrentProjectContentNow()
+                        }
+                    }
+
                     toast("历史数据已恢复")
                 }
             } catch (e: Exception) {
@@ -2483,6 +2623,27 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
+
+    private suspend fun saveCurrentProjectContentNow() {
+        if (currentProjectId <= 0L) return
+
+        saveCurrentPackageToMemoryForSave()
+        saveLoadingScreenToCurrentTrip()
+
+        repository.updateProject(
+            id = currentProjectId,
+            name = currentProjectName,
+            buildingName = currentBuildingName,
+            standardContent = serializeStandardContent(),
+            fastContent = serializeFastContent(),
+            loadingContent = serializeLoadingContent()
+        )
+    }
+
+
 
 
     private fun readHistoryBackupText(item: BackupItem): String {
@@ -2508,20 +2669,17 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(autoSaveRunnable!!, 250)
     }
 
-    fun saveCurrentProjectContent() {
+    fun MainActivity.saveCurrentProjectContent() {
         if (currentProjectId <= 0L) return
 
         lifecycleScope.launch(Dispatchers.IO) {
-            saveCurrentPackageToMemoryForSave()
-            repository.updateProject(
-                id = currentProjectId,
-                name = currentProjectName,
-                buildingName = currentBuildingName,
-                standardContent = serializeStandardContent(),
-                fastContent = serializeFastContent()
-            )
+            saveCurrentProjectContentNow()
         }
     }
+
+
+
+
 
 
 
@@ -2580,13 +2738,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         val newProject = withContext(Dispatchers.IO) {
-            repository.getAllProjects().firstOrNull { it.id == newId }
+            repository.getProjectById(newId)
         }
 
         if (newProject != null) {
             switchProject(newProject)
         }
     }
+
 
 
     private fun showCreateProjectDialog() {
@@ -2734,7 +2893,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val nameView = TextView(this@MainActivity).apply {
-                    text = project.name
+                    text = "${project.name}（${project.buildingName}）"
                     textSize = 16f
                     setTextColor(0xFF222222.toInt())
                     layoutParams = LinearLayout.LayoutParams(
@@ -2833,42 +2992,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun switchProject(project: ProjectEntity) {
-        saveScreenDataToCurrentPackage()
-
-        currentProjectId = project.id
-        currentProjectName = project.name
-        currentBuildingName = project.buildingName
-        tvProjectName.text = "当前项目：$currentProjectName"
-
-        getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("last_project_id", currentProjectId)
-            .apply()
-
-        clearStandardEditingState()
-        clearFastEditingState()
-        pendingReplaceStandardEditing = false
-        pendingReplaceFastEditing = false
-        pendingReplaceCurrentFastModel = false
-        pendingReplaceCurrentStandardModel = false
-
-        rebuildPackageMapsFromProject(project)
-        updatePackageButtonText()
-        updateDisplayTable()
-    }
-
 
 
 
     // =========================
 // 导出 / 分享
 // =========================
-    fun clearPendingExportData() {
-        pendingExportStandardFileName = null
-        pendingExportFastFileName = null
-        pendingExportStandardBytes = null
-        pendingExportFastBytes = null
+
+
+
+    fun MainActivity.safeMerge(
+        sheet: org.apache.poi.ss.usermodel.Sheet,
+        firstRow: Int,
+        lastRow: Int,
+        firstCol: Int,
+        lastCol: Int
+    ) {
+        if (firstRow > lastRow) return
+        if (firstCol > lastCol) return
+        if (firstRow == lastRow && firstCol == lastCol) return
+        sheet.addMergedRegion(CellRangeAddress(firstRow, lastRow, firstCol, lastCol))
     }
 
 
@@ -2877,26 +3020,21 @@ class MainActivity : AppCompatActivity() {
 
 
 
-
-
     private fun registerLogoutReceiver() {
         if (logoutReceiverRegistered) return
 
         val filter = IntentFilter(ForceLogoutHelper.ACTION_FORCE_LOGOUT)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.registerReceiver(
-                this,
-                forceLogoutReceiver,
-                filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            registerReceiver(forceLogoutReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            forceLogoutReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         logoutReceiverRegistered = true
     }
+
 
 
 

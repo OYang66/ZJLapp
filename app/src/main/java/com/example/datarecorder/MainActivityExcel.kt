@@ -217,19 +217,19 @@ fun MainActivity.insertExcelLogo(
         val row0 = sheet.createRow(rowIndex++)
         row0.heightInPoints = 26f
         setCell(row0, 0, "中建铝新材料成都有限公司", mainTitleStyle)
-        sheet.addMergedRegion(CellRangeAddress(0, 0, 0, 4))
+        safeMerge(sheet,0, 0, 0, 4)
         fillRowStyle(row0, 0, 4, mainTitleStyle)
 
         val row1 = sheet.createRow(rowIndex++)
         row1.heightInPoints = 24f
         setCell(row1, 0, "型号统计登记表", subTitleStyle)
-        sheet.addMergedRegion(CellRangeAddress(1, 1, 0, 4))
+        safeMerge(sheet,1, 1, 0, 4)
         fillRowStyle(row1, 0, 4, subTitleStyle)
 
         val row2 = sheet.createRow(rowIndex++)
         setCell(row2, 0, "项目名称", metaLabelStyle)
         setCell(row2, 1, projectName, metaValueStyle)
-        sheet.addMergedRegion(CellRangeAddress(2, 2, 1, 2))
+        safeMerge(sheet,2, 2, 1, 2)
         fillRowStyle(row2, 1, 2, metaValueStyle)
         setCell(row2, 3, "楼栋号", metaLabelStyle)
         setCell(row2, 4, currentBuildingName, metaValueStyle)
@@ -237,7 +237,7 @@ fun MainActivity.insertExcelLogo(
         val row3 = sheet.createRow(rowIndex++)
         setCell(row3, 0, "打包日期", metaLabelStyle)
         setCell(row3, 1, packageDate, metaValueStyle)
-        sheet.addMergedRegion(CellRangeAddress(3, 3, 1, 2))
+        safeMerge(sheet,3, 3, 1, 2)
         fillRowStyle(row3, 1, 2, metaValueStyle)
         setCell(row3, 3, "包号", metaLabelStyle)
         setCell(row3, 4, packageName, metaValueStyle)
@@ -270,7 +270,7 @@ fun MainActivity.insertExcelLogo(
 
         val totalRow = sheet.createRow(rowIndex++)
         setCell(totalRow, 0, "合计", headerStyle)
-        sheet.addMergedRegion(CellRangeAddress(rowIndex - 1, rowIndex - 1, 0, 2))
+        safeMerge(sheet,rowIndex - 1, rowIndex - 1, 0, 2)
         fillRowStyle(totalRow, 0, 2, headerStyle)
         setCell(totalRow, 3, totalQty.toString(), headerStyle)
         setCell(totalRow, 4, "", headerStyle)
@@ -428,15 +428,15 @@ fun MainActivity.insertExcelLogo(
         row4.createCell(c).cellStyle = tableHeaderStyle
     }
 
-    sheet.addMergedRegion(CellRangeAddress(0, 1, 0, 1))
-    sheet.addMergedRegion(CellRangeAddress(0, 0, 2, 8))
-    sheet.addMergedRegion(CellRangeAddress(1, 1, 2, 8))
-    sheet.addMergedRegion(CellRangeAddress(2, 2, 0, 1))
-    sheet.addMergedRegion(CellRangeAddress(2, 2, 2, 4))
-    sheet.addMergedRegion(CellRangeAddress(2, 2, 6, 8))
-    sheet.addMergedRegion(CellRangeAddress(3, 3, 0, 1))
-    sheet.addMergedRegion(CellRangeAddress(3, 3, 2, 4))
-    sheet.addMergedRegion(CellRangeAddress(3, 3, 6, 8))
+    safeMerge(sheet,0, 1, 0, 1)
+    safeMerge(sheet,0, 0, 2, 8)
+    safeMerge(sheet,1, 1, 2, 8)
+    safeMerge(sheet,2, 2, 0, 1)
+    safeMerge(sheet,2, 2, 2, 4)
+    safeMerge(sheet,2, 2, 6, 8)
+    safeMerge(sheet,3, 3, 0, 1)
+    safeMerge(sheet,3, 3, 2, 4)
+    safeMerge(sheet,3, 3, 6, 8)
 
     row0.getCell(2).setCellValue("中建铝新材料成都有限公司")
     row0.getCell(2).cellStyle = titleStyle
@@ -510,7 +510,7 @@ fun MainActivity.insertExcelLogo(
         totalRow.createCell(c).cellStyle = totalStyle
     }
 
-    sheet.addMergedRegion(CellRangeAddress(rowIndex, rowIndex, 0, 1))
+    safeMerge(sheet,rowIndex, rowIndex, 0, 1)
     totalRow.getCell(0).setCellValue("合计")
     totalRow.getCell(5).setCellValue(totalQty.toString())
     totalRow.getCell(6).setCellValue(areaToSquareMeterText(totalUnitAreaRaw))
@@ -522,8 +522,8 @@ fun MainActivity.insertExcelLogo(
         signRow.createCell(c).cellStyle = signStyle
     }
 
-    sheet.addMergedRegion(CellRangeAddress(rowIndex + 1, rowIndex + 1, 0, 4))
-    sheet.addMergedRegion(CellRangeAddress(rowIndex + 1, rowIndex + 1, 5, 8))
+    safeMerge(sheet,rowIndex + 1, rowIndex + 1, 0, 4)
+    safeMerge(sheet,rowIndex + 1, rowIndex + 1, 5, 8)
     signRow.getCell(0).setCellValue("项目记录人：")
     signRow.getCell(5).setCellValue("中建铝记录人：")
 
@@ -535,6 +535,48 @@ fun MainActivity.insertExcelLogo(
         fromRow = 0,
         toRow = 2
     )
+}
+fun MainActivity.requestExportFolderAndExport() {
+    if (currentProjectId <= 0) {
+        toast("请先选择项目")
+        return
+    }
+
+    ioExecutor.execute {
+        try {
+            saveScreenDataToCurrentPackage()
+            saveLoadingScreenToCurrentTrip()
+
+            val standardFileName =
+                buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
+            val fastFileName =
+                buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
+            val loadingFileName =
+                buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
+
+            val standardBytes = buildStandardExcelBytes(currentProjectName)
+            val fastBytes = buildFastExcelBytes(currentProjectName)
+            val loadingBytes = buildLoadingExcelBytes(currentProjectName)
+
+            pendingExportStandardFileName = standardFileName
+            pendingExportFastFileName = fastFileName
+            pendingExportLoadingFileName = loadingFileName
+
+            pendingExportStandardBytes = standardBytes
+            pendingExportFastBytes = fastBytes
+            pendingExportLoadingBytes = loadingBytes
+
+            runOnUiThread {
+                exportFolderPickerLauncher.launch(getLastExportFolderUri())
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            runOnUiThread {
+                clearPendingExportData()
+                toast("导出失败：${e.message ?: "未知错误"}")
+            }
+        }
+    }
 }
 
 
@@ -593,46 +635,18 @@ fun MainActivity.insertExcelLogo(
     file.writeBytes(excelBytes)
 }
 
- fun MainActivity.requestExportFolderAndExport() {
-    if (currentProjectId <= 0) {
-        toast("请先选择项目")
-        return
-    }
-
-    ioExecutor.execute {
-        try {
-            val standardFileName = buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
-            val fastFileName = buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
-
-
-            val standardBytes = buildStandardExcelBytes(currentProjectName)
-            val fastBytes = buildFastExcelBytes(currentProjectName)
-
-            pendingExportStandardFileName = standardFileName
-            pendingExportFastFileName = fastFileName
-            pendingExportStandardBytes = standardBytes
-            pendingExportFastBytes = fastBytes
-
-            runOnUiThread {
-                exportFolderPickerLauncher.launch(getLastExportFolderUri())
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            runOnUiThread {
-                clearPendingExportData()
-                toast("导出失败：${e.message ?: "未知错误"}")
-            }
-        }
-    }
-}
-
- fun MainActivity.exportCurrentProjectToSelectedFolder(treeUri: Uri) {
+fun MainActivity.exportCurrentProjectToSelectedFolder(treeUri: Uri) {
     val standardFileName = pendingExportStandardFileName
     val fastFileName = pendingExportFastFileName
+    val loadingFileName = pendingExportLoadingFileName
+
     val standardBytes = pendingExportStandardBytes
     val fastBytes = pendingExportFastBytes
+    val loadingBytes = pendingExportLoadingBytes
 
-    if (standardFileName == null || fastFileName == null || standardBytes == null || fastBytes == null) {
+    if (standardFileName == null || fastFileName == null || loadingFileName == null ||
+        standardBytes == null || fastBytes == null || loadingBytes == null
+    ) {
         toast("导出失败：没有可导出的数据")
         clearPendingExportData()
         return
@@ -642,9 +656,10 @@ fun MainActivity.insertExcelLogo(
         try {
             writeBytesToTreeUri(treeUri, standardFileName, standardBytes)
             writeBytesToTreeUri(treeUri, fastFileName, fastBytes)
+            writeBytesToTreeUri(treeUri, loadingFileName, loadingBytes)
 
             runOnUiThread {
-                toast("${modeNameStandard}与${modeNameFast}已分别导出")
+                toast("型号统计、返厂统计、返厂装车已分别导出")
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -656,8 +671,17 @@ fun MainActivity.insertExcelLogo(
         }
     }
 }
+fun MainActivity.clearPendingExportData() {
+    pendingExportStandardFileName = null
+    pendingExportFastFileName = null
+    pendingExportLoadingFileName = null
+    pendingExportStandardBytes = null
+    pendingExportFastBytes = null
+    pendingExportLoadingBytes = null
+}
 
- fun MainActivity.writeBytesToTreeUri(treeUri: Uri, fileName: String, bytes: ByteArray) {
+
+fun MainActivity.writeBytesToTreeUri(treeUri: Uri, fileName: String, bytes: ByteArray) {
     val pickedDir = DocumentFile.fromTreeUri(this, treeUri)
         ?: throw Exception("无法打开所选文件夹")
 
@@ -678,8 +702,7 @@ fun MainActivity.insertExcelLogo(
     requestExportFolderAndExport()
 }
 
-
- fun MainActivity.shareCurrentModeProject() {
+fun MainActivity.shareCurrentModeProject() {
     if (currentProjectId <= 0) {
         toast("请先选择项目")
         return
@@ -687,18 +710,19 @@ fun MainActivity.insertExcelLogo(
 
     ioExecutor.execute {
         try {
-            val fileName = if (isFastMode) {
-                buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
-            } else {
-                buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
+            saveScreenDataToCurrentPackage()
+            saveLoadingScreenToCurrentTrip()
+
+            val fileName = when (currentModeType) {
+                ModeType.FAST -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
+                ModeType.STANDARD -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
+                ModeType.RETURN_LOADING -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
             }
 
-
-
-            val excelBytes = if (isFastMode) {
-                buildFastExcelBytes(currentProjectName)
-            } else {
-                buildStandardExcelBytes(currentProjectName)
+            val excelBytes = when (currentModeType) {
+                ModeType.FAST -> buildFastExcelBytes(currentProjectName)
+                ModeType.STANDARD -> buildStandardExcelBytes(currentProjectName)
+                ModeType.RETURN_LOADING -> buildLoadingExcelBytes(currentProjectName)
             }
 
             val shareDir = File(cacheDir, "share")
@@ -758,7 +782,8 @@ fun MainActivity.insertExcelLogo(
     }
 }
 
- fun MainActivity.getExcelMimeType(fileName: String): String {
+
+fun MainActivity.getExcelMimeType(fileName: String): String {
     return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 }
 

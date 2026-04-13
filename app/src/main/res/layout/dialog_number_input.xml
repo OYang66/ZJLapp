@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="请输入"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvDialogValue"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="8dp"
+        android:background="#F2F2F2"
+        android:gravity="center"
+        android:text="请输入"
+        android:textSize="18sp" />
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:alignmentMode="alignMargins"
+        android:columnCount="3"
+        android:useDefaultMargins="true">
+
+        <Button android:id="@+id/btnNum1" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="1"/>
+        <Button android:id="@+id/btnNum2" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="2"/>
+        <Button android:id="@+id/btnNum3" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="3"/>
+
+        <Button android:id="@+id/btnNum4" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="4"/>
+        <Button android:id="@+id/btnNum5" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="5"/>
+        <Button android:id="@+id/btnNum6" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="6"/>
+
+        <Button android:id="@+id/btnNum7" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="7"/>
+        <Button android:id="@+id/btnNum8" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="8"/>
+        <Button android:id="@+id/btnNum9" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="9"/>
+
+        <Button android:id="@+id/btnNum00" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="00"/>
+        <Button android:id="@+id/btnNum0" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="0"/>
+        <Button android:id="@+id/btnNumDot" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:text="."/>
+    </GridLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnNumBackspace"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="回退" />
+
+        <Button
+            android:id="@+id/btnDialogCancel"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="取消" />
+
+        <Button
+            android:id="@+id/btnDialogConfirm"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="确定" />
+    </LinearLayout>
+</LinearLayout>

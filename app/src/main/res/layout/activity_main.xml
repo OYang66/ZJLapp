@@ -105,7 +105,7 @@
             android:layout_height="30dp"
             android:layout_marginStart="6dp"
             android:background="@drawable/bg_purple_button"
-            android:text="返厂统计"
+            android:text="切换模式"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="11sp" />
@@ -847,6 +847,497 @@
                     android:rowCount="1" />
             </LinearLayout>
         </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/loadingModeContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- 铁件显示区域 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bg_group"
+                android:padding="6dp">
+
+                <HorizontalScrollView
+                    android:id="@+id/loadingHeaderHorizontalScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fillViewport="true"
+                    android:scrollbars="none">
+
+                    <TableLayout
+                        android:id="@+id/loadingTableHeader"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:shrinkColumns="*"
+                        android:stretchColumns="*" />
+                </HorizontalScrollView>
+
+                <HorizontalScrollView
+                    android:id="@+id/loadingBodyHorizontalScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="148dp"
+                    android:layout_marginTop="2dp"
+                    android:fillViewport="true"
+                    android:scrollbars="none">
+
+                    <ScrollView
+                        android:id="@+id/loadingBodyVerticalScroll"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fillViewport="true">
+
+                        <TableLayout
+                            android:id="@+id/loadingTable"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:shrinkColumns="*"
+                            android:stretchColumns="*" />
+                    </ScrollView>
+                </HorizontalScrollView>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_group"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="6dp">
+
+                    <TextView
+                        android:id="@+id/tvLoadingIronTotal"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="start|center_vertical"
+                        android:text="铁件单包称重合计：0"
+                        android:textColor="#222222"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvLoadingIronWeighbridge"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="end|center_vertical"
+                        android:text="铁件过磅重量：0"
+                        android:textColor="#222222"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+
+            </LinearLayout>
+
+
+            <!-- 按钮与数字区 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_group"
+                android:padding="6dp">
+
+                <!-- 三个主按钮一行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:orientation="horizontal"
+                    android:weightSum="3">
+
+                    <Button
+                        android:id="@+id/btnLoadingAluminum"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_purple_button"
+                        android:text="铝物料"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btnAddIronMaterial"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_purple_button"
+                        android:text="铁物料"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/btnVehicleInfo"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_purple_button"
+                        android:text="过磅信息"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- 数字区 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+
+                    <GridLayout
+                        android:id="@+id/layoutLoadingNumbers"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="0.78"
+                        android:columnCount="3"
+                        android:rowCount="4"
+                        android:alignmentMode="alignMargins"
+                        android:useDefaultMargins="true">
+
+
+                        <Button
+                            android:id="@+id/btnLoading7"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="7"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading8"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="8"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading9"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="9"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading4"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="4"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading5"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="5"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading6"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="6"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading1"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="1"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading2"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="2"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading3"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="3"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading0"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="0"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoading00"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="00"
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+
+                        <Button
+                            android:id="@+id/btnLoadingDot"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:minHeight="0dp"
+                            android:minWidth="0dp"
+                            android:padding="0dp"
+                            android:gravity="center"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="13sp"
+                            android:autoSizeStepGranularity="1sp"
+                            android:background="@drawable/bg_key"
+                            android:text="."
+                            android:textAllCaps="false"
+                            android:textSize="13sp" />
+
+                    </GridLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="0.34"
+                        android:layout_marginStart="4dp"
+                        android:orientation="vertical">
+
+                        <Button
+                            android:id="@+id/btnLoadingNextColumn"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_margin="1dp"
+                            android:background="@drawable/bg_key"
+                            android:text="换列"
+                            android:textAllCaps="false"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:includeFontPadding="false"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="11sp"
+                            android:autoSizeStepGranularity="1sp" />
+
+                        <Button
+                            android:id="@+id/btnLoadingNextRow"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_margin="1dp"
+                            android:background="@drawable/bg_key"
+                            android:text="换行"
+                            android:textAllCaps="false"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:includeFontPadding="false"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="11sp"
+                            android:autoSizeStepGranularity="1sp" />
+
+                        <Button
+                            android:id="@+id/btnLoadingBackspace"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_margin="1dp"
+                            android:background="@drawable/bg_key"
+                            android:text="回退"
+                            android:textAllCaps="false"
+                            android:textSize="11sp"
+                            android:maxLines="1"
+                            android:includeFontPadding="false"
+                            android:autoSizeTextType="uniform"
+                            android:autoSizeMinTextSize="8sp"
+                            android:autoSizeMaxTextSize="11sp"
+                            android:autoSizeStepGranularity="1sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+
 
 
     </FrameLayout>
