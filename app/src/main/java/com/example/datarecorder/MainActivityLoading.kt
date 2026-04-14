@@ -197,9 +197,16 @@ fun MainActivity.buildLoadingHeaderRow(): TableRow {
     headerRow.addView(packageCell)
 
     headerRow.addView(createTableCell("面积", true))
-    headerRow.addView(createTableCell("重量", true))
-    headerRow.addView(createTableCell("备注", true))
 
+    val weightCell = createTableCell(getLoadingWeightHeaderText(ReturnLoadingType.ALUMINUM), true).apply {
+
+    isClickable = true
+        isFocusable = true
+        setOnClickListener { showLoadingWeightModeMenu(this, ReturnLoadingType.ALUMINUM) }
+    }
+    headerRow.addView(weightCell)
+
+    headerRow.addView(createTableCell("备注", true))
     return headerRow
 }
 
@@ -278,7 +285,7 @@ fun MainActivity.renderLoadingTable() {
 
         row.addView(
             createTableCell(
-                text = rowData.weight,
+                text = getLoadingDisplayedWeight(listType, rowData),
                 isHeader = false,
                 selected = currentLoadingEditType == listType &&
                         currentLoadingEditIndex == rowIndex &&
@@ -291,6 +298,7 @@ fun MainActivity.renderLoadingTable() {
                 }
             )
         )
+
 
         row.addView(
             createTableCell(
@@ -320,21 +328,28 @@ fun MainActivity.renderLoadingTable() {
         }
     }
 
-    val aluminumTotal = loadingAluminumRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
-    val ironTotal = loadingIronRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
+
+    val aluminumSingleTotal = loadingAluminumRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
+    val ironSingleTotal = loadingIronRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
+
+    val aluminumSummaryValue = if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+        vehicleInfo.aluminumWeight()
+    } else {
+        aluminumSingleTotal
+    }
+
+    val ironSummaryValue = if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+        vehicleInfo.ironWeight()
+    } else {
+        ironSingleTotal
+    }
 
     tvSummaryPrimary.visibility = View.VISIBLE
     tvSummarySecondary.visibility = View.VISIBLE
-    tvSummaryPrimary.text = "铝模单包称重合计：${formatLoadingNumber(aluminumTotal)}"
+    tvSummaryPrimary.text = "铝模单包称重合计：${formatLoadingNumber(aluminumSummaryValue)}"
     tvSummarySecondary.text = "铝模过磅重量：${formatLoadingNumber(vehicleInfo.aluminumWeight())}"
 
-    val ironHeader = TableRow(this)
-    ironHeader.addView(createTableCell("物料名称", true))
-    ironHeader.addView(createTableCell("包数", true))
-    ironHeader.addView(createTableCell("数量", true))
-    ironHeader.addView(createTableCell("重量", true))
-    ironHeader.addView(createTableCell("备注", true))
-    loadingTableHeader.addView(ironHeader)
+    loadingTableHeader.addView(buildIronLoadingHeaderRow())
 
     if (loadingIronRows.isEmpty()) {
         val row = TableRow(this)
@@ -346,11 +361,11 @@ fun MainActivity.renderLoadingTable() {
         }
     }
 
-
     tvLoadingIronWeighbridge.visibility = View.VISIBLE
     tvLoadingIronTotal.visibility = View.VISIBLE
     tvLoadingIronWeighbridge.text = "铁件过磅重量：${formatLoadingNumber(vehicleInfo.ironWeight())}"
-    tvLoadingIronTotal.text = "铁件单包称重合计：${formatLoadingNumber(ironTotal)}"
+    tvLoadingIronTotal.text = "铁件单包称重合计：${formatLoadingNumber(ironSummaryValue)}"
+
 
     saveLoadingScreenToCurrentTrip()
     if (currentLoadingTripName.isNotBlank()) {
@@ -369,10 +384,111 @@ fun MainActivity.renderLoadingTable() {
         triggerAutoSave()
     }
 }
+fun MainActivity.showLoadingWeightModeMenu(
+    anchor: View,
+    type: ReturnLoadingType
+) {
+    val popup = PopupMenu(this, anchor)
+    popup.menu.add(0, 1, 0, "单包重量")
+    popup.menu.add(0, 2, 1, "过磅总重量")
 
+    popup.setOnMenuItemClickListener { item ->
+        when (item.itemId) {
+            1 -> {
+                if (type == ReturnLoadingType.ALUMINUM) {
+                    loadingAluminumWeightMode = LoadingWeightMode.SINGLE_PACKAGE
+                } else {
+                    loadingIronWeightMode = LoadingWeightMode.SINGLE_PACKAGE
+                }
+                saveLoadingScreenToCurrentTrip()
+                renderLoadingTable()
+                triggerAutoSave()
+                true
+            }
+
+            2 -> {
+                if (type == ReturnLoadingType.ALUMINUM) {
+                    loadingAluminumWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
+                } else {
+                    loadingIronWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
+                }
+                saveLoadingScreenToCurrentTrip()
+                renderLoadingTable()
+                triggerAutoSave()
+                true
+            }
+
+            else -> false
+        }
+    }
+    popup.show()
+}
+
+
+fun MainActivity.getLoadingWeightHeaderText(type: ReturnLoadingType): String {
+    val mode = when (type) {
+        ReturnLoadingType.ALUMINUM -> loadingAluminumWeightMode
+        ReturnLoadingType.IRON -> loadingIronWeightMode
+    }
+
+    return when (mode) {
+        LoadingWeightMode.UNSELECTED -> "选择重量"
+        LoadingWeightMode.SINGLE_PACKAGE -> "单包重量"
+        LoadingWeightMode.WEIGHBRIDGE_TOTAL -> "过磅总重量"
+    }
+}
+
+fun MainActivity.ensureLoadingWeightModeSelected(type: ReturnLoadingType): Boolean {
+    val mode = when (type) {
+        ReturnLoadingType.ALUMINUM -> loadingAluminumWeightMode
+        ReturnLoadingType.IRON -> loadingIronWeightMode
+    }
+
+    if (mode != LoadingWeightMode.UNSELECTED) return true
+
+    val targetName = if (type == ReturnLoadingType.ALUMINUM) "铝模" else "铁件"
+    toast("请先点击${targetName}重量，选择单包重量或过磅总重量")
+    return false
+}
+
+
+
+fun MainActivity.isLoadingWeightEditable(type: ReturnLoadingType): Boolean {
+    return when (type) {
+        ReturnLoadingType.ALUMINUM -> loadingAluminumWeightMode == LoadingWeightMode.SINGLE_PACKAGE
+        ReturnLoadingType.IRON -> loadingIronWeightMode == LoadingWeightMode.SINGLE_PACKAGE
+    }
+}
+
+fun MainActivity.getLoadingDisplayedWeight(
+    type: ReturnLoadingType,
+    row: ReturnLoadingRow
+): String {
+    return if (isLoadingWeightEditable(type)) row.weight else ""
+}
+
+fun MainActivity.buildIronLoadingHeaderRow(): TableRow {
+    val headerRow = TableRow(this)
+
+    headerRow.addView(createTableCell("物料名称", true))
+    headerRow.addView(createTableCell("包数", true))
+    headerRow.addView(createTableCell("数量", true))
+
+    val weightCell = createTableCell(getLoadingWeightHeaderText(ReturnLoadingType.IRON), true).apply {
+
+    isClickable = true
+        isFocusable = true
+        setOnClickListener { showLoadingWeightModeMenu(this, ReturnLoadingType.IRON) }
+    }
+    headerRow.addView(weightCell)
+
+    headerRow.addView(createTableCell("备注", true))
+    return headerRow
+}
 
 fun MainActivity.addLoadingMaterial(type: ReturnLoadingType, materialName: String) {
     if (!ensureLoadingTripSelected()) return
+    if (!ensureLoadingWeightModeSelected(type)) return
 
     val targetList = if (type == ReturnLoadingType.ALUMINUM) loadingAluminumRows else loadingIronRows
     val row = ReturnLoadingRow(type = type, materialName = materialName)
@@ -395,10 +511,19 @@ fun MainActivity.addLoadingMaterial(type: ReturnLoadingType, materialName: Strin
         ReturnLoadingField.PACKAGE_OR_COUNT
     }
 
+    if (!isLoadingWeightEditable(type) && currentLoadingField == ReturnLoadingField.WEIGHT) {
+        currentLoadingField = if (type == ReturnLoadingType.ALUMINUM) {
+            if (loadingAluminumUsePackageCount) ReturnLoadingField.PACKAGE_OR_COUNT else ReturnLoadingField.AREA_OR_WEIGHT
+        } else {
+            ReturnLoadingField.PACKAGE_OR_COUNT
+        }
+    }
+
     renderLoadingTable()
     triggerAutoSave()
     scrollLoadingTablesToBottom()
 }
+
 
 
 
@@ -587,7 +712,10 @@ fun MainActivity.appendLoadingValue(value: String) {
         ReturnLoadingField.MATERIAL_NAME -> return
         ReturnLoadingField.PACKAGE_OR_COUNT -> row.packageOrCount += value
         ReturnLoadingField.AREA_OR_WEIGHT -> row.areaOrWeight += value
-        ReturnLoadingField.WEIGHT -> row.weight += value
+        ReturnLoadingField.WEIGHT -> {
+            if (!isLoadingWeightEditable(currentLoadingEditType)) return
+            row.weight += value
+        }
         ReturnLoadingField.REMARK -> return
     }
 
@@ -617,18 +745,21 @@ fun MainActivity.moveLoadingToNextRow() {
         loadingIronRows
     }
 
-    val newRow = ReturnLoadingRow(type = currentLoadingEditType)
-    if (currentLoadingEditType == ReturnLoadingType.ALUMINUM && !loadingAluminumUsePackageCount) {
-        newRow.packageOrCount = generateNextLoadingPackageNo()
+    if (list.isEmpty()) {
+        toast("请先通过铝物料或铁物料新增数据")
+        return
     }
 
-    list.add(newRow)
-    currentLoadingEditIndex = list.lastIndex
-    currentLoadingField = ReturnLoadingField.MATERIAL_NAME
-
-    renderLoadingTable()
-    triggerAutoSave()
-    scrollLoadingTablesToBottom()
+    val nextIndex = currentLoadingEditIndex + 1
+    if (nextIndex in list.indices) {
+        val targetField = currentLoadingField
+        currentLoadingEditIndex = nextIndex
+        currentLoadingField = targetField
+        renderLoadingTable()
+        triggerAutoSave()
+    } else {
+        toast("请通过铝物料或铁物料新增数据")
+    }
 }
 
 
@@ -640,7 +771,10 @@ fun MainActivity.deleteLastLoadingValue() {
         ReturnLoadingField.MATERIAL_NAME -> return
         ReturnLoadingField.PACKAGE_OR_COUNT -> if (row.packageOrCount.isNotEmpty()) row.packageOrCount = row.packageOrCount.dropLast(1)
         ReturnLoadingField.AREA_OR_WEIGHT -> if (row.areaOrWeight.isNotEmpty()) row.areaOrWeight = row.areaOrWeight.dropLast(1)
-        ReturnLoadingField.WEIGHT -> if (row.weight.isNotEmpty()) row.weight = row.weight.dropLast(1)
+        ReturnLoadingField.WEIGHT -> {
+            if (!isLoadingWeightEditable(currentLoadingEditType)) return
+            if (row.weight.isNotEmpty()) row.weight = row.weight.dropLast(1)
+        }
         ReturnLoadingField.REMARK -> return
     }
 

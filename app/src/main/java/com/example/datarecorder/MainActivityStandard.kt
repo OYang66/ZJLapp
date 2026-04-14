@@ -1,4 +1,5 @@
 package com.example.datarecorder
+import android.view.View
 
 
  fun MainActivity.handleStandardTokenInput(token: String) {
@@ -41,9 +42,10 @@ package com.example.datarecorder
         }
     }
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
+     refreshStandardVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
 
  fun MainActivity.appendStandardToLastField(text: String) {
     if (!ensurePackageSelected()) return
@@ -78,9 +80,10 @@ package com.example.datarecorder
         }
     }
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
+     refreshStandardVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
 
 
  fun MainActivity.canAppendToInstallNo(text: String): Boolean {
@@ -88,11 +91,7 @@ package com.example.datarecorder
 }
 
 
- fun containsLetters(text: String): Boolean {
-    return text.any { it.isLetter() }
-}
-
- fun MainActivity.moveToNextStandardColumn() {
+fun MainActivity.moveToNextStandardColumn() {
     if (!ensurePackageSelected()) return
 
     if (moveEditingStandardCellToNextColumn()) {
@@ -100,37 +99,81 @@ package com.example.datarecorder
         return
     }
 
+    val oldField = currentStandardField
+
     currentStandardField = when (currentStandardField) {
         StandardField.INSTALL_NO -> StandardField.MODEL
         StandardField.MODEL -> StandardField.QUANTITY
         StandardField.QUANTITY -> StandardField.INSTALL_NO
     }
     lastStandardField = currentStandardField
-    updateDisplayTable()
+
+    if (oldField != currentStandardField) {
+        refreshStandardSelectionOnly(
+            oldSavedRowIndex = null,
+            oldWasCurrentRow = true,
+            newSavedRowIndex = null,
+            newWasCurrentRow = true
+        )
+    }
+
     triggerAutoSave()
 }
 
- fun MainActivity.finishCurrentStandardRow() {
+
+
+fun MainActivity.finishCurrentStandardRow() {
     if (!ensurePackageSelected()) return
 
     if (editingStandardRowIndex != null) {
+        val oldRowIndex = editingStandardRowIndex
         clearStandardEditingState()
-        updateDisplayTable()
+        if (oldRowIndex != null) {
+            rebuildStandardRowOnly(oldRowIndex, false)
+        }
         triggerAutoSave()
         return
     }
 
     if (!currentStandardRow.isEmpty()) {
+        val savedIndex = savedStandardRows.size
         savedStandardRows.add(currentStandardRow.copy())
+
+        // 把原来的“当前行”改造成“已保存行”，不能再按 current row 重建
+        rebuildStandardRowOnly(savedIndex, false)
+
+        currentStandardRow = StandardRow()
+        currentStandardField = StandardField.INSTALL_NO
+        lastStandardField = StandardField.INSTALL_NO
+
+        addStandardDataRow(
+            displayIndex = savedStandardRows.size + 1,
+            data = currentStandardRow.copy(),
+            isCurrentRow = true,
+            savedRowIndex = null
+        )
+
+        tvSummaryPrimary.visibility = View.VISIBLE
+        tvSummarySecondary.visibility = View.GONE
+        tvSummaryPrimary.text = "合计数量：${calculateStandardTotalQty()}"
+
+        bodyVerticalScroll.post {
+            bodyVerticalScroll.fullScroll(View.FOCUS_DOWN)
+        }
+
+        triggerAutoSave()
+        return
     }
-    currentStandardRow = StandardRow()
+
     currentStandardField = StandardField.INSTALL_NO
     lastStandardField = StandardField.INSTALL_NO
-    updateDisplayTable()
+    refreshStandardSelectionOnly(null, true, null, true)
     triggerAutoSave()
 }
 
- fun MainActivity.deleteLastStandardInput() {
+
+
+fun MainActivity.deleteLastStandardInput() {
     if (!ensurePackageSelected()) return
     if (deleteFromEditingStandardCell()) return
 
@@ -189,9 +232,10 @@ package com.example.datarecorder
         }
     }
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
+     refreshStandardVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
 
 
 fun MainActivity.serializeStandardContent(): String {

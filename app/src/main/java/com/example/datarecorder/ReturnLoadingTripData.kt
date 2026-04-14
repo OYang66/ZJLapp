@@ -4,5 +4,8 @@ data class ReturnLoadingTripData(
     var tripName: String = "",
     var aluminumRows: MutableList<ReturnLoadingRow> = mutableListOf(),
     var ironRows: MutableList<ReturnLoadingRow> = mutableListOf(),
-    var vehicleInfo: VehicleInfo = VehicleInfo()
+    var vehicleInfo: VehicleInfo = VehicleInfo(),
+    var aluminumWeightMode: LoadingWeightMode = LoadingWeightMode.UNSELECTED,
+    var ironWeightMode: LoadingWeightMode = LoadingWeightMode.UNSELECTED
 )
+

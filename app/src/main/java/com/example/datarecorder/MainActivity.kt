@@ -54,6 +54,34 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
+    var loadingAluminumWeightMode: LoadingWeightMode = LoadingWeightMode.UNSELECTED
+    var loadingIronWeightMode: LoadingWeightMode = LoadingWeightMode.UNSELECTED
+
+
+    private val standardInstallCellMap = linkedMapOf<Int, TextView>()
+    private val standardModelCellMap = linkedMapOf<Int, TextView>()
+    private val standardQuantityCellMap = linkedMapOf<Int, TextView>()
+
+    private val fastWidthCellMap = linkedMapOf<Int, TextView>()
+    private val fastModelCellMap = linkedMapOf<Int, TextView>()
+    private val fastLengthCellMap = linkedMapOf<Int, TextView>()
+    private val fastQuantityCellMap = linkedMapOf<Int, TextView>()
+
+    private var currentStandardInstallCell: TextView? = null
+    private var currentStandardModelCell: TextView? = null
+    private var currentStandardQuantityCell: TextView? = null
+
+    private var currentFastWidthCell: TextView? = null
+    private var currentFastModelCell: TextView? = null
+    private var currentFastLengthCell: TextView? = null
+    private var currentFastQuantityCell: TextView? = null
+    private val standardRowViewMap = linkedMapOf<Int, TableRow>()
+    private var currentStandardRowView: TableRow? = null
+
+    private val fastRowViewMap = linkedMapOf<Int, TableRow>()
+    private var currentFastRowView: TableRow? = null
+
+
     lateinit var db: AppDatabase
     lateinit var repository: ProjectRepository
     lateinit var appUpdateManager: AppUpdateManager
@@ -223,7 +251,7 @@ class MainActivity : AppCompatActivity() {
     var editingStandardRowIndex: Int? = null
     private var editingStandardField: StandardField? = null
 
-    private var editingFastRowIndex: Int? = null
+    var editingFastRowIndex: Int? = null
     var editingFastField: FastField? = null
     var pendingReplaceStandardEditing = false
     var pendingReplaceFastEditing = false
@@ -613,49 +641,9 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun saveScreenDataToCurrentPackage() {
-        if (currentPackageName.isBlank()) return
 
-        packageStandardRowsMap[currentPackageName] = savedStandardRows.map { it.copy() }.toMutableList()
-        packageCurrentStandardRowMap[currentPackageName] = currentStandardRow.copy()
 
-        packageFastRowsMap[currentPackageName] = savedFastRows.map { it.copy() }.toMutableList()
-        packageCurrentFastRowMap[currentPackageName] = currentFastRow.copy()
-    }
 
-    private fun loadPackageToScreen(packageName: String) {
-        currentPackageName = packageName
-        updatePackageButtonText()
-
-        savedStandardRows.clear()
-        savedStandardRows.addAll(packageStandardRowsMap[packageName]?.map { it.copy() } ?: emptyList())
-        currentStandardRow = packageCurrentStandardRowMap[packageName]?.copy() ?: StandardRow()
-        currentStandardField = StandardField.INSTALL_NO
-        lastStandardField = StandardField.INSTALL_NO
-
-        savedFastRows.clear()
-        savedFastRows.addAll(packageFastRowsMap[packageName]?.map { it.copy() } ?: emptyList())
-        currentFastRow = packageCurrentFastRowMap[packageName]?.copy() ?: FastRow()
-        currentFastNumericField = FastField.WIDTH
-        currentFastActiveField = FastField.WIDTH
-        lastFastField = FastField.WIDTH
-
-        clearStandardEditingState()
-        clearFastEditingState()
-        pendingReplaceStandardEditing = false
-        pendingReplaceFastEditing = false
-        pendingReplaceCurrentFastModel = false
-        pendingReplaceCurrentStandardModel = false
-
-        updateDisplayTable()
-    }
-
-    private fun getAllPackageNamesInOrder(): List<String> {
-        val names = linkedSetOf<String>()
-        names.addAll(packageStandardRowsMap.keys)
-        names.addAll(packageFastRowsMap.keys)
-        return names.toList()
-    }
 
     private fun generateNextPackageName(): String {
         val maxIndex = getAllPackageNamesInOrder()
@@ -689,58 +677,9 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun switchPackage(packageName: String) {
-        if (packageName.isBlank()) return
-        if (!getAllPackageNamesInOrder().contains(packageName)) return
 
-        saveScreenDataToCurrentPackage()
-        loadPackageToScreen(packageName)
-    }
 
-    fun MainActivity.showPackageMenuPopup(anchor: View) {
-        if (currentProjectId <= 0L) {
-            toast("请先新建或选择项目")
-            return
-        }
 
-        val popup = PopupMenu(this, anchor)
-        var order = 0
-
-        if (currentModeType == ModeType.RETURN_LOADING) {
-            loadingTripMap.keys.forEachIndexed { index, tripName ->
-                popup.menu.add(0, 1000 + index, order++, tripName)
-            }
-            popup.menu.add(0, 1, order, "增加车次")
-        } else {
-            getAllPackageNamesInOrder().forEachIndexed { index, packageName ->
-                popup.menu.add(0, 1000 + index, order++, packageName)
-            }
-            popup.menu.add(0, 1, order, "增加包号")
-        }
-
-        popup.setOnMenuItemClickListener { item ->
-            when {
-                item.itemId == 1 -> {
-                    if (currentModeType == ModeType.RETURN_LOADING) {
-                        addNewLoadingTrip()
-                    } else {
-                        addNewPackage()
-                    }
-                    true
-                }
-                item.itemId >= 1000 -> {
-                    if (currentModeType == ModeType.RETURN_LOADING) {
-                        switchLoadingTrip(item.title.toString())
-                    } else {
-                        switchPackage(item.title.toString())
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
-    }
 
     private fun resetForNewProjectWithoutPackage() {
         clearAllPackageMaps()
@@ -1302,6 +1241,11 @@ class MainActivity : AppCompatActivity() {
         updateDisplayTable()
     }
 
+    fun containsLetters(text: String): Boolean {
+        return text.any { it.isLetter() }
+    }
+
+
     fun appendTextToEditingStandardCell(text: String): Boolean {
         val rowIndex = editingStandardRowIndex ?: return false
         val field = editingStandardField ?: return false
@@ -1337,9 +1281,10 @@ class MainActivity : AppCompatActivity() {
 
         pendingReplaceStandardEditing = false
         lastStandardField = field
-        updateDisplayTable()
+        refreshStandardVisibleCellsOnly()
         triggerAutoSave()
         return true
+
     }
 
     fun deleteFromEditingStandardCell(): Boolean {
@@ -1357,23 +1302,34 @@ class MainActivity : AppCompatActivity() {
 
         pendingReplaceStandardEditing = false
         lastStandardField = field
-        updateDisplayTable()
+        refreshStandardVisibleCellsOnly()
         triggerAutoSave()
         return true
+
     }
 
     fun moveEditingStandardCellToNextColumn(): Boolean {
-        val field = editingStandardField ?: return false
-        editingStandardField = when (field) {
+        val oldRowIndex = editingStandardRowIndex ?: return false
+        val oldField = editingStandardField ?: return false
+
+        editingStandardField = when (oldField) {
             StandardField.INSTALL_NO -> StandardField.MODEL
             StandardField.MODEL -> StandardField.QUANTITY
             StandardField.QUANTITY -> StandardField.INSTALL_NO
         }
+
         currentStandardField = editingStandardField!!
         lastStandardField = editingStandardField!!
-        updateDisplayTable()
+
+        refreshStandardSelectionOnly(
+            oldSavedRowIndex = oldRowIndex,
+            oldWasCurrentRow = false,
+            newSavedRowIndex = oldRowIndex,
+            newWasCurrentRow = false
+        )
         return true
     }
+
 
     fun appendTextToEditingFastCell(text: String): Boolean {
         val rowIndex = editingFastRowIndex ?: return false
@@ -1458,9 +1414,10 @@ class MainActivity : AppCompatActivity() {
         pendingReplaceFastEditing = false
         currentFastActiveField = field
         lastFastField = field
-        updateDisplayTable()
+        refreshFastVisibleCellsOnly()
         triggerAutoSave()
         return true
+
     }
 
     fun deleteFromEditingFastCell(): Boolean {
@@ -1491,9 +1448,10 @@ class MainActivity : AppCompatActivity() {
         pendingReplaceFastEditing = false
         currentFastActiveField = field
         lastFastField = field
-        updateDisplayTable()
+        refreshFastVisibleCellsOnly()
         triggerAutoSave()
         return true
+
     }
 
     // =========================
@@ -1601,6 +1559,149 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun refreshStandardVisibleCellsOnly() {
+        if (currentModeType != ModeType.STANDARD) return
+
+        if (editingStandardRowIndex != null) {
+            val rowIndex = editingStandardRowIndex ?: return
+            val row = savedStandardRows.getOrNull(rowIndex) ?: return
+            standardInstallCellMap[rowIndex]?.text = row.installNo
+            standardModelCellMap[rowIndex]?.text = row.model
+            standardQuantityCellMap[rowIndex]?.text = row.quantity
+        } else {
+            currentStandardInstallCell?.text = currentStandardRow.installNo
+            currentStandardModelCell?.text = currentStandardRow.model
+            currentStandardQuantityCell?.text = currentStandardRow.quantity
+        }
+
+        tvSummaryPrimary.visibility = View.VISIBLE
+        tvSummarySecondary.visibility = View.GONE
+        tvSummaryPrimary.text = "合计数量：${calculateStandardTotalQty()}"
+    }
+
+    fun refreshFastVisibleCellsOnly() {
+        if (currentModeType != ModeType.FAST) return
+
+        if (editingFastRowIndex != null) {
+            val rowIndex = editingFastRowIndex ?: return
+            val row = savedFastRows.getOrNull(rowIndex) ?: return
+            fastWidthCellMap[rowIndex]?.text = row.width
+            fastModelCellMap[rowIndex]?.text = row.model
+            fastLengthCellMap[rowIndex]?.text = row.length
+            fastQuantityCellMap[rowIndex]?.text = row.quantity
+        } else {
+            currentFastWidthCell?.text = currentFastRow.width
+            currentFastModelCell?.text = currentFastRow.model
+            currentFastLengthCell?.text = currentFastRow.length
+            currentFastQuantityCell?.text = currentFastRow.quantity
+        }
+
+        tvSummaryPrimary.visibility = View.VISIBLE
+        tvSummarySecondary.visibility = View.VISIBLE
+        tvSummaryPrimary.text = "合计面积：${formatAreaSquareMeter(calculateFastTotalArea())}"
+        tvSummarySecondary.text = "合计数量：${calculateFastTotalQty()}"
+    }
+
+    private fun clearStandardCellRefs() {
+        standardInstallCellMap.clear()
+        standardModelCellMap.clear()
+        standardQuantityCellMap.clear()
+        currentStandardInstallCell = null
+        currentStandardModelCell = null
+        currentStandardQuantityCell = null
+        standardRowViewMap.clear()
+        currentStandardRowView = null
+    }
+
+
+    private fun clearFastCellRefs() {
+        fastWidthCellMap.clear()
+        fastModelCellMap.clear()
+        fastLengthCellMap.clear()
+        fastQuantityCellMap.clear()
+        currentFastWidthCell = null
+        currentFastModelCell = null
+        currentFastLengthCell = null
+        currentFastQuantityCell = null
+        fastRowViewMap.clear()
+        currentFastRowView = null
+    }
+    fun rebuildStandardRowOnly(savedRowIndex: Int?, isCurrentRow: Boolean) {
+        if (currentModeType != ModeType.STANDARD) return
+
+        val displayIndex = if (savedRowIndex != null) savedRowIndex + 1 else savedStandardRows.size + 1
+        val data = if (savedRowIndex != null) {
+            savedStandardRows.getOrNull(savedRowIndex)?.copy() ?: return
+        } else {
+            currentStandardRow.copy()
+        }
+
+        val newRow = buildStandardDataRowView(
+            displayIndex = displayIndex,
+            data = data,
+            isCurrentRow = isCurrentRow,
+            savedRowIndex = savedRowIndex
+        )
+
+        val targetIndex = if (savedRowIndex != null) savedRowIndex else tableBody.childCount - 1
+        if (targetIndex < 0 || targetIndex >= tableBody.childCount) return
+
+        tableBody.removeViewAt(targetIndex)
+        tableBody.addView(newRow, targetIndex)
+    }
+
+    fun rebuildFastRowOnly(savedRowIndex: Int?, isCurrentRow: Boolean) {
+        if (currentModeType != ModeType.FAST) return
+
+        val displayIndex = if (savedRowIndex != null) savedRowIndex + 1 else savedFastRows.size + 1
+        val data = if (savedRowIndex != null) {
+            savedFastRows.getOrNull(savedRowIndex)?.copy() ?: return
+        } else {
+            currentFastRow.copy()
+        }
+
+        val newRow = buildFastDataRowView(
+            displayIndex = displayIndex,
+            data = data,
+            isCurrentRow = isCurrentRow,
+            savedRowIndex = savedRowIndex
+        )
+
+        val targetIndex = if (savedRowIndex != null) savedRowIndex else tableBody.childCount - 1
+        if (targetIndex < 0 || targetIndex >= tableBody.childCount) return
+
+        tableBody.removeViewAt(targetIndex)
+        tableBody.addView(newRow, targetIndex)
+    }
+
+    fun refreshStandardSelectionOnly(
+        oldSavedRowIndex: Int?,
+        oldWasCurrentRow: Boolean,
+        newSavedRowIndex: Int?,
+        newWasCurrentRow: Boolean
+    ) {
+        if (currentModeType != ModeType.STANDARD) return
+        rebuildStandardRowOnly(oldSavedRowIndex, oldWasCurrentRow)
+        if (oldSavedRowIndex != newSavedRowIndex || oldWasCurrentRow != newWasCurrentRow) {
+            rebuildStandardRowOnly(newSavedRowIndex, newWasCurrentRow)
+        }
+    }
+
+    fun refreshFastSelectionOnly(
+        oldSavedRowIndex: Int?,
+        oldWasCurrentRow: Boolean,
+        newSavedRowIndex: Int?,
+        newWasCurrentRow: Boolean
+    ) {
+        if (currentModeType != ModeType.FAST) return
+        rebuildFastRowOnly(oldSavedRowIndex, oldWasCurrentRow)
+        if (oldSavedRowIndex != newSavedRowIndex || oldWasCurrentRow != newWasCurrentRow) {
+            rebuildFastRowOnly(newSavedRowIndex, newWasCurrentRow)
+        }
+    }
+
+
+
     fun updateDisplayTable() {
         when (currentModeType) {
             ModeType.FAST -> {
@@ -1636,6 +1737,8 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun renderStandardTable() {
+        clearStandardCellRefs()
+
         addTableHeader("序号", "安装编号", "型号", "数量")
 
         if (savedStandardRows.isEmpty() && currentStandardRow.isEmpty()) {
@@ -1665,6 +1768,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
     private fun renderFastTable() {
+        clearFastCellRefs()
+
         addTableHeader("序号", "宽度", "型号", "长度", "数量")
 
         if (savedFastRows.isEmpty() && currentFastRow.isEmpty()) {
@@ -1704,13 +1809,12 @@ class MainActivity : AppCompatActivity() {
         if (c5 != null) row.addView(createTableCell(c5, true))
         tableHeader.addView(row)
     }
-
-    private fun addStandardDataRow(
+    private fun buildStandardDataRowView(
         displayIndex: Int,
         data: StandardRow,
         isCurrentRow: Boolean,
         savedRowIndex: Int? = null
-    ) {
+    ): TableRow {
         val row = TableRow(this)
 
         row.addView(
@@ -1725,87 +1829,120 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        row.addView(
-            createTableCell(
-                text = data.installNo,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.INSTALL_NO
+        val installCell = createTableCell(
+            text = data.installNo,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.INSTALL_NO
+            } else {
+                editingStandardRowIndex == null && currentStandardField == StandardField.INSTALL_NO
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectStandardSavedCell(savedRowIndex, StandardField.INSTALL_NO)
                 } else {
-                    editingStandardRowIndex == null && currentStandardField == StandardField.INSTALL_NO
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectStandardSavedCell(savedRowIndex, StandardField.INSTALL_NO)
-                    } else {
-                        clearStandardEditingState()
-                        pendingReplaceStandardEditing = false
-                        currentStandardField = StandardField.INSTALL_NO
-                        lastStandardField = StandardField.INSTALL_NO
-                        updateDisplayTable()
+                    val oldField = currentStandardField
+                    clearStandardEditingState()
+                    pendingReplaceStandardEditing = false
+                    currentStandardField = StandardField.INSTALL_NO
+                    lastStandardField = StandardField.INSTALL_NO
+                    if (oldField != currentStandardField) {
+                        refreshStandardSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(installCell)
 
-        row.addView(
-            createTableCell(
-                text = data.model,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.MODEL
+        val modelCell = createTableCell(
+            text = data.model,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.MODEL
+            } else {
+                editingStandardRowIndex == null && currentStandardField == StandardField.MODEL
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectStandardSavedCell(savedRowIndex, StandardField.MODEL)
                 } else {
-                    editingStandardRowIndex == null && currentStandardField == StandardField.MODEL
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectStandardSavedCell(savedRowIndex, StandardField.MODEL)
-                    } else {
-                        clearStandardEditingState()
-                        pendingReplaceStandardEditing = false
-                        currentStandardField = StandardField.MODEL
-                        lastStandardField = StandardField.MODEL
-                        updateDisplayTable()
+                    val oldField = currentStandardField
+                    clearStandardEditingState()
+                    pendingReplaceStandardEditing = false
+                    currentStandardField = StandardField.MODEL
+                    lastStandardField = StandardField.MODEL
+                    if (oldField != currentStandardField) {
+                        refreshStandardSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(modelCell)
 
-        row.addView(
-            createTableCell(
-                text = data.quantity,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.QUANTITY
+        val quantityCell = createTableCell(
+            text = data.quantity,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.QUANTITY
+            } else {
+                editingStandardRowIndex == null && currentStandardField == StandardField.QUANTITY
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectStandardSavedCell(savedRowIndex, StandardField.QUANTITY)
                 } else {
-                    editingStandardRowIndex == null && currentStandardField == StandardField.QUANTITY
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectStandardSavedCell(savedRowIndex, StandardField.QUANTITY)
-                    } else {
-                        clearStandardEditingState()
-                        pendingReplaceStandardEditing = false
-                        currentStandardField = StandardField.QUANTITY
-                        lastStandardField = StandardField.QUANTITY
-                        updateDisplayTable()
+                    val oldField = currentStandardField
+                    clearStandardEditingState()
+                    pendingReplaceStandardEditing = false
+                    currentStandardField = StandardField.QUANTITY
+                    lastStandardField = StandardField.QUANTITY
+                    if (oldField != currentStandardField) {
+                        refreshStandardSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(quantityCell)
 
-        tableBody.addView(row)
+        if (savedRowIndex != null) {
+            standardInstallCellMap[savedRowIndex] = installCell
+            standardModelCellMap[savedRowIndex] = modelCell
+            standardQuantityCellMap[savedRowIndex] = quantityCell
+            standardRowViewMap[savedRowIndex] = row
+        } else {
+            currentStandardInstallCell = installCell
+            currentStandardModelCell = modelCell
+            currentStandardQuantityCell = quantityCell
+            currentStandardRowView = row
+        }
+
+        return row
     }
 
-    private fun addFastDataRow(
+    fun addStandardDataRow(
+        displayIndex: Int,
+        data: StandardRow,
+        isCurrentRow: Boolean,
+        savedRowIndex: Int? = null
+    ) {
+        tableBody.addView(
+            buildStandardDataRowView(
+                displayIndex = displayIndex,
+                data = data,
+                isCurrentRow = isCurrentRow,
+                savedRowIndex = savedRowIndex
+            )
+        )
+    }
+    private fun buildFastDataRowView(
         displayIndex: Int,
         data: FastRow,
         isCurrentRow: Boolean,
         savedRowIndex: Int? = null
-    ) {
+    ): TableRow {
         val row = TableRow(this)
 
         row.addView(
@@ -1820,107 +1957,147 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        row.addView(
-            createTableCell(
-                text = data.width,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingFastRowIndex == savedRowIndex && editingFastField == FastField.WIDTH
+        val widthCell = createTableCell(
+            text = data.width,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingFastRowIndex == savedRowIndex && editingFastField == FastField.WIDTH
+            } else {
+                editingFastRowIndex == null && currentFastActiveField == FastField.WIDTH
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectFastSavedCell(savedRowIndex, FastField.WIDTH)
                 } else {
-                    editingFastRowIndex == null && currentFastActiveField == FastField.WIDTH
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectFastSavedCell(savedRowIndex, FastField.WIDTH)
-                    } else {
-                        clearFastEditingState()
-                        pendingReplaceFastEditing = false
-                        currentFastNumericField = FastField.WIDTH
-                        currentFastActiveField = FastField.WIDTH
-                        lastFastField = FastField.WIDTH
-                        updateDisplayTable()
+                    val oldField = currentFastActiveField
+                    clearFastEditingState()
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.WIDTH
+                    currentFastActiveField = FastField.WIDTH
+                    lastFastField = FastField.WIDTH
+                    if (oldField != currentFastActiveField) {
+                        refreshFastSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(widthCell)
 
-        row.addView(
-            createTableCell(
-                text = data.model,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingFastRowIndex == savedRowIndex && editingFastField == FastField.MODEL
+        val modelCell = createTableCell(
+            text = data.model,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingFastRowIndex == savedRowIndex && editingFastField == FastField.MODEL
+            } else {
+                editingFastRowIndex == null && currentFastActiveField == FastField.MODEL
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectFastSavedCell(savedRowIndex, FastField.MODEL)
                 } else {
-                    editingFastRowIndex == null && currentFastActiveField == FastField.MODEL
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectFastSavedCell(savedRowIndex, FastField.MODEL)
-                    } else {
-                        clearFastEditingState()
-                        pendingReplaceFastEditing = false
-                        currentFastActiveField = FastField.MODEL
-                        lastFastField = FastField.MODEL
-                        updateDisplayTable()
+                    val oldField = currentFastActiveField
+                    clearFastEditingState()
+                    pendingReplaceFastEditing = false
+                    currentFastActiveField = FastField.MODEL
+                    lastFastField = FastField.MODEL
+                    if (oldField != currentFastActiveField) {
+                        refreshFastSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(modelCell)
 
-        row.addView(
-            createTableCell(
-                text = data.length,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingFastRowIndex == savedRowIndex && editingFastField == FastField.LENGTH
+        val lengthCell = createTableCell(
+            text = data.length,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingFastRowIndex == savedRowIndex && editingFastField == FastField.LENGTH
+            } else {
+                editingFastRowIndex == null && currentFastActiveField == FastField.LENGTH
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectFastSavedCell(savedRowIndex, FastField.LENGTH)
                 } else {
-                    editingFastRowIndex == null && currentFastActiveField == FastField.LENGTH
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectFastSavedCell(savedRowIndex, FastField.LENGTH)
-                    } else {
-                        clearFastEditingState()
-                        pendingReplaceFastEditing = false
-                        currentFastNumericField = FastField.LENGTH
-                        currentFastActiveField = FastField.LENGTH
-                        lastFastField = FastField.LENGTH
-                        updateDisplayTable()
+                    val oldField = currentFastActiveField
+                    clearFastEditingState()
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.LENGTH
+                    currentFastActiveField = FastField.LENGTH
+                    lastFastField = FastField.LENGTH
+                    if (oldField != currentFastActiveField) {
+                        refreshFastSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(lengthCell)
 
-        row.addView(
-            createTableCell(
-                text = data.quantity,
-                isHeader = false,
-                highlight = isCurrentRow,
-                selected = if (savedRowIndex != null) {
-                    editingFastRowIndex == savedRowIndex && editingFastField == FastField.QUANTITY
+        val quantityCell = createTableCell(
+            text = data.quantity,
+            isHeader = false,
+            highlight = isCurrentRow,
+            selected = if (savedRowIndex != null) {
+                editingFastRowIndex == savedRowIndex && editingFastField == FastField.QUANTITY
+            } else {
+                editingFastRowIndex == null && currentFastActiveField == FastField.QUANTITY
+            },
+            onClick = {
+                if (savedRowIndex != null) {
+                    selectFastSavedCell(savedRowIndex, FastField.QUANTITY)
                 } else {
-                    editingFastRowIndex == null && currentFastActiveField == FastField.QUANTITY
-                },
-                onClick = {
-                    if (savedRowIndex != null) {
-                        selectFastSavedCell(savedRowIndex, FastField.QUANTITY)
-                    } else {
-                        clearFastEditingState()
-                        pendingReplaceFastEditing = false
-                        currentFastNumericField = FastField.QUANTITY
-                        currentFastActiveField = FastField.QUANTITY
-                        lastFastField = FastField.QUANTITY
-                        updateDisplayTable()
+                    val oldField = currentFastActiveField
+                    clearFastEditingState()
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.QUANTITY
+                    currentFastActiveField = FastField.QUANTITY
+                    lastFastField = FastField.QUANTITY
+                    if (oldField != currentFastActiveField) {
+                        refreshFastSelectionOnly(null, true, null, true)
                     }
                 }
-            )
+            }
         )
+        row.addView(quantityCell)
 
-        tableBody.addView(row)
+        if (savedRowIndex != null) {
+            fastWidthCellMap[savedRowIndex] = widthCell
+            fastModelCellMap[savedRowIndex] = modelCell
+            fastLengthCellMap[savedRowIndex] = lengthCell
+            fastQuantityCellMap[savedRowIndex] = quantityCell
+            fastRowViewMap[savedRowIndex] = row
+        } else {
+            currentFastWidthCell = widthCell
+            currentFastModelCell = modelCell
+            currentFastLengthCell = lengthCell
+            currentFastQuantityCell = quantityCell
+            currentFastRowView = row
+        }
+
+        return row
     }
+
+
+    fun addFastDataRow(
+        displayIndex: Int,
+        data: FastRow,
+        isCurrentRow: Boolean,
+        savedRowIndex: Int? = null
+    ) {
+        tableBody.addView(
+            buildFastDataRowView(
+                displayIndex = displayIndex,
+                data = data,
+                isCurrentRow = isCurrentRow,
+                savedRowIndex = savedRowIndex
+            )
+        )
+    }
+
 
     fun createTableCell(
         text: String,
@@ -2011,14 +2188,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun calculateStandardTotalQty(): Int {
+    fun calculateStandardTotalQty(): Int {
         val rows = mutableListOf<StandardRow>()
         rows.addAll(savedStandardRows)
         if (!currentStandardRow.isEmpty()) rows.add(currentStandardRow.copy())
         return rows.sumOf { it.quantity.toIntOrNull() ?: 1 }
     }
 
-    private fun formatAreaSquareMeter(rawArea: Double): String {
+    fun formatAreaSquareMeter(rawArea: Double): String {
         return "${dfArea.format(rawArea / 1_000_000.0)}㎡"
     }
 
@@ -2289,16 +2466,16 @@ class MainActivity : AppCompatActivity() {
         file.writeBytes(bytes)
     }
 
-    private fun loadRecentHistoryBackups(projectName: String): List<BackupItem> {
+    private fun loadRecentHistoryBackups(): List<BackupItem> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            loadRecentHistoryBackupsFromMediaStore(projectName)
+            loadRecentHistoryBackupsFromMediaStore()
         } else {
-            loadRecentHistoryBackupsFromLegacy(projectName)
+            loadRecentHistoryBackupsFromLegacy()
         }
     }
 
-    private fun loadRecentHistoryBackupsFromMediaStore(projectName: String): List<BackupItem> {
-        val safeName = projectName.replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_")
+
+    private fun loadRecentHistoryBackupsFromMediaStore(): List<BackupItem> {
         val result = mutableListOf<BackupItem>()
         val collection = MediaStore.Files.getContentUri("external")
 
@@ -2312,7 +2489,7 @@ class MainActivity : AppCompatActivity() {
             "${MediaStore.Files.FileColumns.RELATIVE_PATH}=? AND ${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
         val selectionArgs = arrayOf(
             historyBackupRelativePath,
-            "${safeName}_历史数据自动备份_%.json"
+            "%历史数据自动备份_%.json"
         )
 
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
@@ -2334,7 +2511,7 @@ class MainActivity : AppCompatActivity() {
                         BackupItem(
                             id = id,
                             fileName = name,
-                            projectName = projectName,
+                            projectName = "",
                             timeMillis = timeMillis,
                             uri = uri
                         )
@@ -2342,11 +2519,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-        return result.sortedByDescending { it.timeMillis }.take(5)
+        return result.sortedByDescending { it.timeMillis }.take(100)
     }
 
-    private fun loadRecentHistoryBackupsFromLegacy(projectName: String): List<BackupItem> {
-        val safeName = projectName.replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_")
+    private fun loadRecentHistoryBackupsFromLegacy(): List<BackupItem> {
         val root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val dir = File(root, historyBackupDirNameLegacy)
         if (!dir.exists()) return emptyList()
@@ -2356,20 +2532,21 @@ class MainActivity : AppCompatActivity() {
         return files
             .filter {
                 it.isFile &&
-                        it.name.startsWith("${safeName}_历史数据自动备份_") &&
+                        it.name.contains("历史数据自动备份_") &&
                         it.name.endsWith(".json")
             }
             .sortedByDescending { it.lastModified() }
-            .take(5)
+            .take(100)
             .map {
                 BackupItem(
                     fileName = it.name,
-                    projectName = projectName,
+                    projectName = "",
                     timeMillis = it.lastModified(),
                     file = it
                 )
             }
     }
+
 
     private fun trimHistoryBackupFilesMediaStore(projectName: String, keepCount: Int) {
         val safeName = projectName.replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_")
@@ -2442,13 +2619,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showHistoryBackupDialog() {
-        if (currentProjectId <= 0L) {
-            toast("请先选择项目")
-            return
-        }
-
         lifecycleScope.launch(Dispatchers.IO) {
-            val backups = loadRecentHistoryBackups(currentProjectName)
+            val backups = loadRecentHistoryBackups()
 
             withContext(Dispatchers.Main) {
                 if (backups.isEmpty()) {
@@ -2496,13 +2668,67 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
+                    val deleteBtn = Button(this@MainActivity).apply {
+                        text = "删除"
+                        textSize = 12f
+                        isAllCaps = false
+                        setOnClickListener {
+                            confirmDeleteHistoryBackup(item) {
+                                container.removeView(row)
+                                if (container.childCount == 0) {
+                                    dialog.dismiss()
+                                    toast("暂无历史数据")
+                                }
+                            }
+                        }
+                    }
+
                     row.addView(fileNameView)
                     row.addView(restoreBtn)
+                    row.addView(deleteBtn)
                     container.addView(row)
                 }
 
                 dialog.show()
             }
+        }
+    }
+
+
+    private fun confirmDeleteHistoryBackup(item: BackupItem, onDeleted: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle("确认删除")
+            .setMessage("是否删除该历史备份？\n删除后无法恢复。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val success = deleteHistoryBackup(item)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            onDeleted()
+                            toast("备份已删除")
+                        } else {
+                            toast("删除失败")
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun deleteHistoryBackup(item: BackupItem): Boolean {
+        return try {
+            when {
+                item.uri != null -> {
+                    contentResolver.delete(item.uri, null, null) > 0
+                }
+                item.file != null -> {
+                    item.file.delete()
+                }
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 

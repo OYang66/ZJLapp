@@ -37,6 +37,7 @@ fun MainActivity.switchPackage(packageName: String) {
     saveScreenDataToCurrentPackage()
     loadPackageToScreen(packageName)
 }
+
 fun MainActivity.showPackageMenuPopup(anchor: View) {
     if (currentProjectId <= 0L) {
         toast("请先新建或选择项目")
@@ -50,12 +51,14 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
         loadingTripMap.keys.forEachIndexed { index, tripName ->
             popup.menu.add(0, 1000 + index, order++, tripName)
         }
-        popup.menu.add(0, 1, order, "增加车次")
+        popup.menu.add(0, 1, order++, "增加车次")
+        popup.menu.add(0, 2, order, "删除当前车次")
     } else {
         getAllPackageNamesInOrder().forEachIndexed { index, packageName ->
             popup.menu.add(0, 1000 + index, order++, packageName)
         }
-        popup.menu.add(0, 1, order, "增加包号")
+        popup.menu.add(0, 1, order++, "增加包号")
+        popup.menu.add(0, 2, order, "删除当前包号")
     }
 
     popup.setOnMenuItemClickListener { item ->
@@ -68,6 +71,12 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
                 }
                 true
             }
+
+            item.itemId == 2 -> {
+                confirmDeleteCurrentPackageOrTrip()
+                true
+            }
+
             item.itemId >= 1000 -> {
                 if (currentModeType == ModeType.RETURN_LOADING) {
                     switchLoadingTrip(item.title.toString())
@@ -76,6 +85,7 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
                 }
                 true
             }
+
             else -> false
         }
     }
@@ -190,7 +200,12 @@ fun MainActivity.addNewLoadingTrip() {
     }
 
     val tripName = "第${maxIndex + 1}车"
-    loadingTripMap[tripName] = ReturnLoadingTripData(tripName = tripName)
+    loadingTripMap[tripName] = ReturnLoadingTripData(
+        tripName = tripName,
+        aluminumWeightMode = LoadingWeightMode.UNSELECTED,
+        ironWeightMode = LoadingWeightMode.UNSELECTED
+    )
+
     switchLoadingTrip(tripName)
     triggerAutoSave()
 }
@@ -209,6 +224,8 @@ fun MainActivity.switchLoadingTrip(tripName: String) {
     loadingIronRows.clear()
     loadingIronRows.addAll(trip.ironRows.map { it.copy() })
     vehicleInfo = trip.vehicleInfo.copy()
+    loadingAluminumWeightMode = trip.aluminumWeightMode
+    loadingIronWeightMode = trip.ironWeightMode
 
     currentLoadingEditType = ReturnLoadingType.ALUMINUM
     currentLoadingEditIndex = if (loadingAluminumRows.isEmpty()) -1 else 0
@@ -219,6 +236,108 @@ fun MainActivity.switchLoadingTrip(tripName: String) {
 }
 
 
+fun MainActivity.deleteCurrentPackage() {
+    if (currentPackageName.isBlank()) {
+        toast("当前没有可删除的包号")
+        return
+    }
+
+    val targetName = currentPackageName
+    val allNames = getAllPackageNamesInOrder()
+    if (!allNames.contains(targetName)) {
+        toast("当前包号不存在")
+        return
+    }
+
+    packageStandardRowsMap.remove(targetName)
+    packageCurrentStandardRowMap.remove(targetName)
+    packageFastRowsMap.remove(targetName)
+    packageCurrentFastRowMap.remove(targetName)
+    packageDateMap.remove(targetName)
+
+    val remainNames = getAllPackageNamesInOrder()
+    if (remainNames.isNotEmpty()) {
+        val oldIndex = allNames.indexOf(targetName)
+        val nextName = remainNames.getOrNull(oldIndex.coerceAtMost(remainNames.lastIndex)) ?: remainNames.first()
+        loadPackageToScreen(nextName)
+    } else {
+        resetForNewProjectWithoutPackage()
+    }
+
+    triggerAutoSave()
+    toast("已删除：$targetName")
+}
+
+fun MainActivity.deleteCurrentLoadingTrip() {
+    if (currentLoadingTripName.isBlank()) {
+        toast("当前没有可删除的车次")
+        return
+    }
+
+    val targetName = currentLoadingTripName
+    val allNames = loadingTripMap.keys.toList()
+    if (!loadingTripMap.containsKey(targetName)) {
+        toast("当前车次不存在")
+        return
+    }
+
+    loadingTripMap.remove(targetName)
+
+    val remainNames = loadingTripMap.keys.toList()
+    if (remainNames.isNotEmpty()) {
+        val oldIndex = allNames.indexOf(targetName)
+        val nextName = remainNames.getOrNull(oldIndex.coerceAtMost(remainNames.lastIndex)) ?: remainNames.first()
+        switchLoadingTrip(nextName)
+    } else {
+        currentLoadingTripName = ""
+        btnPackageMenu.text = "车次"
+        loadingAluminumRows.clear()
+        loadingIronRows.clear()
+        vehicleInfo = VehicleInfo()
+        currentLoadingEditType = ReturnLoadingType.ALUMINUM
+        currentLoadingEditIndex = -1
+        currentLoadingField = ReturnLoadingField.MATERIAL_NAME
+        renderLoadingTable()
+        triggerAutoSave()
+    }
+
+    toast("已删除：$targetName")
+}
+
+
+fun MainActivity.confirmDeleteCurrentPackageOrTrip() {
+    if (currentModeType == ModeType.RETURN_LOADING) {
+        if (currentLoadingTripName.isBlank()) {
+            toast("当前没有可删除的车次")
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("确认删除")
+            .setMessage("是否删除${currentLoadingTripName}数据？\n删除后无法恢复。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                deleteCurrentLoadingTrip()
+            }
+            .show()
+    } else {
+        if (currentPackageName.isBlank()) {
+            toast("当前没有可删除的包号")
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("确认删除")
+            .setMessage("是否删除${currentPackageName}数据？\n删除后无法恢复。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("删除") { _, _ ->
+                deleteCurrentPackage()
+            }
+            .show()
+    }
+}
+
+
 fun MainActivity.saveLoadingScreenToCurrentTrip() {
     if (currentLoadingTripName.isBlank()) return
 
@@ -226,9 +345,12 @@ fun MainActivity.saveLoadingScreenToCurrentTrip() {
         tripName = currentLoadingTripName,
         aluminumRows = loadingAluminumRows.map { it.copy() }.toMutableList(),
         ironRows = loadingIronRows.map { it.copy() }.toMutableList(),
-        vehicleInfo = vehicleInfo.copy()
+        vehicleInfo = vehicleInfo.copy(),
+        aluminumWeightMode = loadingAluminumWeightMode,
+        ironWeightMode = loadingIronWeightMode
     )
 }
+
 
 fun MainActivity.serializeLoadingContent(): String {
     saveLoadingScreenToCurrentTrip()
@@ -236,11 +358,17 @@ fun MainActivity.serializeLoadingContent(): String {
     val root = JSONObject()
     root.put("currentLoadingTripName", currentLoadingTripName)
     root.put("loadingAluminumColumnMode", if (loadingAluminumUsePackageCount) "COUNT" else "PACKAGE_NO")
+    root.put("loadingAluminumWeightMode", loadingAluminumWeightMode.name)
+    root.put("loadingIronWeightMode", loadingIronWeightMode.name)
+
 
     val trips = JSONArray()
     loadingTripMap.values.forEach { trip ->
         val obj = JSONObject()
         obj.put("tripName", trip.tripName)
+        obj.put("aluminumWeightMode", trip.aluminumWeightMode.name)
+        obj.put("ironWeightMode", trip.ironWeightMode.name)
+
 
         val alArray = JSONArray()
         trip.aluminumRows.forEach { row ->
@@ -294,6 +422,22 @@ fun MainActivity.deserializeLoadingContent(content: String) {
     val restoredTripName = root.optString("currentLoadingTripName", "")
     loadingAluminumUsePackageCount =
         root.optString("loadingAluminumColumnMode", "PACKAGE_NO") == "COUNT"
+    loadingAluminumWeightMode = try {
+        LoadingWeightMode.valueOf(
+            root.optString("loadingAluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+        )
+    } catch (_: Exception) {
+        LoadingWeightMode.SINGLE_PACKAGE
+    }
+
+    loadingIronWeightMode = try {
+        LoadingWeightMode.valueOf(
+            root.optString("loadingIronWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+        )
+    } catch (_: Exception) {
+        LoadingWeightMode.SINGLE_PACKAGE
+    }
+
 
     val trips = root.optJSONArray("trips") ?: JSONArray()
     for (i in 0 until trips.length()) {
@@ -302,6 +446,22 @@ fun MainActivity.deserializeLoadingContent(content: String) {
         if (tripName.isBlank()) continue
 
         val trip = ReturnLoadingTripData(tripName = tripName)
+        trip.aluminumWeightMode = try {
+            LoadingWeightMode.valueOf(
+                obj.optString("aluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+            )
+        } catch (_: Exception) {
+            LoadingWeightMode.SINGLE_PACKAGE
+        }
+
+        trip.ironWeightMode = try {
+            LoadingWeightMode.valueOf(
+                obj.optString("ironWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+            )
+        } catch (_: Exception) {
+            LoadingWeightMode.SINGLE_PACKAGE
+        }
+
 
         val alArray = obj.optJSONArray("aluminumRows") ?: JSONArray()
         for (j in 0 until alArray.length()) {
@@ -360,11 +520,16 @@ fun MainActivity.deserializeLoadingContent(content: String) {
         loadingIronRows.clear()
         loadingIronRows.addAll(trip?.ironRows?.map { it.copy() } ?: emptyList())
         vehicleInfo = trip?.vehicleInfo?.copy() ?: VehicleInfo()
+        loadingAluminumWeightMode = trip?.aluminumWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
+        loadingIronWeightMode = trip?.ironWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
     } else {
         loadingAluminumRows.clear()
         loadingIronRows.clear()
         vehicleInfo = VehicleInfo()
+        loadingAluminumWeightMode = LoadingWeightMode.UNSELECTED
+        loadingIronWeightMode = LoadingWeightMode.UNSELECTED
     }
+
 
     currentLoadingEditType = ReturnLoadingType.ALUMINUM
     currentLoadingEditIndex = if (loadingAluminumRows.isEmpty()) -1 else 0

@@ -1,6 +1,7 @@
 package com.example.datarecorder
 
 import java.util.Locale
+import android.view.View
 
 
 fun MainActivity.initFastModeArea() {
@@ -111,9 +112,10 @@ fun MainActivity.initFastModeArea() {
         }
     }
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
+     refreshFastVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
 
  fun MainActivity.appendFastModelToken(value: String) {
     if (!ensurePackageSelected()) return
@@ -133,14 +135,18 @@ fun MainActivity.initFastModeArea() {
     pendingReplaceCurrentFastModel = false
     currentFastNumericField = resolveNextFastNumericFieldAfterModel(currentFastRow)
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
- fun MainActivity.moveToNextFastColumn() {
+     refreshFastVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
+fun MainActivity.moveToNextFastColumn() {
     if (!ensurePackageSelected()) return
 
     if (hasFastEditingTarget()) {
-        editingFastField = when (editingFastField!!) {
+        val oldRowIndex = editingFastRowIndex ?: return
+        val oldField = editingFastField ?: return
+
+        editingFastField = when (oldField) {
             FastField.WIDTH -> FastField.MODEL
             FastField.MODEL -> FastField.LENGTH
             FastField.LENGTH -> FastField.QUANTITY
@@ -156,10 +162,19 @@ fun MainActivity.initFastModeArea() {
         }
         lastFastField = editingFastField!!
         pendingReplaceFastEditing = true
-        updateDisplayTable()
+
+        refreshFastSelectionOnly(
+            oldSavedRowIndex = oldRowIndex,
+            oldWasCurrentRow = false,
+            newSavedRowIndex = oldRowIndex,
+            newWasCurrentRow = false
+        )
+
         triggerAutoSave()
         return
     }
+
+    val oldField = currentFastActiveField
 
     currentFastNumericField = when (currentFastNumericField) {
         FastField.WIDTH -> FastField.LENGTH
@@ -169,34 +184,76 @@ fun MainActivity.initFastModeArea() {
     }
     currentFastActiveField = currentFastNumericField
     lastFastField = currentFastNumericField
-    updateDisplayTable()
+
+    if (oldField != currentFastActiveField) {
+        refreshFastSelectionOnly(
+            oldSavedRowIndex = null,
+            oldWasCurrentRow = true,
+            newSavedRowIndex = null,
+            newWasCurrentRow = true
+        )
+    }
+
     triggerAutoSave()
 }
 
- fun MainActivity.finishCurrentFastRow() {
+
+fun MainActivity.finishCurrentFastRow() {
     if (!ensurePackageSelected()) return
 
     if (hasFastEditingTarget()) {
+        val oldRowIndex = editingFastRowIndex
         clearFastEditingState()
         currentFastNumericField = FastField.WIDTH
         currentFastActiveField = FastField.WIDTH
         lastFastField = FastField.WIDTH
-        updateDisplayTable()
+        if (oldRowIndex != null) {
+            rebuildFastRowOnly(oldRowIndex, false)
+        }
         triggerAutoSave()
         return
     }
 
     if (!currentFastRow.isEmpty()) {
+        val savedIndex = savedFastRows.size
         savedFastRows.add(currentFastRow.copy())
+
+        // 把原来的“当前行”改造成“已保存行”，不能再按 current row 重建
+        rebuildFastRowOnly(savedIndex, false)
+
+        currentFastRow = FastRow()
+        currentFastNumericField = FastField.WIDTH
+        currentFastActiveField = FastField.WIDTH
+        lastFastField = FastField.WIDTH
+
+        addFastDataRow(
+            displayIndex = savedFastRows.size + 1,
+            data = currentFastRow.copy(),
+            isCurrentRow = true,
+            savedRowIndex = null
+        )
+
+        tvSummaryPrimary.visibility = View.VISIBLE
+        tvSummarySecondary.visibility = View.VISIBLE
+        tvSummaryPrimary.text = "合计面积：${formatAreaSquareMeter(calculateFastTotalArea())}"
+        tvSummarySecondary.text = "合计数量：${calculateFastTotalQty()}"
+
+        bodyVerticalScroll.post {
+            bodyVerticalScroll.fullScroll(View.FOCUS_DOWN)
+        }
+
+        triggerAutoSave()
+        return
     }
 
-    currentFastRow = FastRow()
     currentFastNumericField = FastField.WIDTH
     currentFastActiveField = FastField.WIDTH
     lastFastField = FastField.WIDTH
-    updateDisplayTable()
+    refreshFastSelectionOnly(null, true, null, true)
     triggerAutoSave()
 }
+
+
 
  fun MainActivity.deleteLastFastInput() {
     if (!ensurePackageSelected()) return
@@ -354,9 +411,10 @@ fun MainActivity.initFastModeArea() {
         }
     }
 
-    updateDisplayTable()
-    triggerAutoSave()
-}
+     refreshFastVisibleCellsOnly()
+     triggerAutoSave()
+
+ }
 
  fun MainActivity.clearFastRows() {
     clearFastEditingState()

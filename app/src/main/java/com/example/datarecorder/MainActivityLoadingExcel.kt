@@ -252,6 +252,19 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
         val aluminumWeightSum = aluminumRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
         val ironWeightSum = ironRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
 
+        val aluminumExcelWeightTotal = if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+            vehicle.aluminumWeight()
+        } else {
+            aluminumWeightSum
+        }
+
+        val ironExcelWeightTotal = if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+            vehicle.ironWeight()
+        } else {
+            ironWeightSum
+        }
+
+
         // 铝件数据
         val aluminumStart = rowIndex
         aluminumRows.forEach { item ->
@@ -259,17 +272,23 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
             set(rowIndex, 1, item.materialName)
             set(rowIndex, 2, item.packageOrCount)
             set(rowIndex, 3, item.areaOrWeight)
-            set(rowIndex, 4, item.weight)
+            set(rowIndex, 4, if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
             safeMerge(sheet, rowIndex, rowIndex, 5, 8)
             set(rowIndex, 5, item.remark)
             rowIndex++
         }
 
+        if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && aluminumRows.isNotEmpty()) {
+            safeMerge(sheet, aluminumStart, rowIndex - 1, 4, 4)
+            set(aluminumStart, 4, formatLoadingNumber(vehicle.aluminumWeight()))
+        }
+
+
         // 铝件合计
         val aluminumTotalRow = rowIndex
         fill(aluminumTotalRow)
         set(aluminumTotalRow, 1, "返厂合计")
-        set(aluminumTotalRow, 4, formatLoadingNumber(aluminumWeightSum))
+        set(aluminumTotalRow, 4, formatLoadingNumber(aluminumExcelWeightTotal))
         safeMerge(sheet, aluminumTotalRow, aluminumTotalRow, 5, 8)
         rowIndex++
 
@@ -313,17 +332,23 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
             set(rowIndex, 1, item.materialName)
             set(rowIndex, 2, item.packageOrCount)
             set(rowIndex, 3, item.areaOrWeight)
-            set(rowIndex, 4, item.weight)
+            set(rowIndex, 4, if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
             safeMerge(sheet, rowIndex, rowIndex, 5, 8)
             set(rowIndex, 5, item.remark)
             rowIndex++
         }
 
+        if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && ironRows.isNotEmpty()) {
+            safeMerge(sheet, ironStart, rowIndex - 1, 4, 4)
+            set(ironStart, 4, formatLoadingNumber(vehicle.ironWeight()))
+        }
+
+
         // 铁件合计
         val ironTotalRow = rowIndex
         fill(ironTotalRow)
         set(ironTotalRow, 1, "返厂合计")
-        set(ironTotalRow, 4, formatLoadingNumber(ironWeightSum))
+        set(ironTotalRow, 4, formatLoadingNumber(ironExcelWeightTotal))
         safeMerge(sheet, ironTotalRow, ironTotalRow, 5, 8)
         rowIndex++
 
