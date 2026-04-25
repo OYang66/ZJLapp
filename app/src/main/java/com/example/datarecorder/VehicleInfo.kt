@@ -5,7 +5,9 @@ data class VehicleInfo(
     var tareWeight: String = "",
     var middleAluminumWeight: String = "",
     var middleIronWeight: String = "",
-    var woodEstimate: String = ""
+    var woodEstimate: String = "",
+    var vehiclePlateNumber: String = "",
+    var loadingDate: String = ""
 ) {
     fun netWeight(): Double {
         val gross = grossWeight.toDoubleOrNull() ?: 0.0

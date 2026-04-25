@@ -6,6 +6,7 @@ import retrofit2.http.GET
 
 interface UpdateApiService {
 
-    @GET("/api/app/version/latest")
+    @GET("api/app/version/latest")
+
     suspend fun getLatestVersion(): ApiResponse<AppVersionInfo>
 }

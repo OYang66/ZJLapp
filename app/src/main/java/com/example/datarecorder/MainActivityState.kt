@@ -20,8 +20,14 @@ fun MainActivity.ensurePackageDate(packageName: String) {
 }
 
 fun MainActivity.updatePackageButtonText() {
-    btnPackageMenu.text = if (currentPackageName.isBlank()) "包号" else currentPackageName
+    val text = when (currentModeType) {
+        ModeType.RETURN_LOADING -> if (currentLoadingTripName.isBlank()) "车次" else currentLoadingTripName
+        else -> if (currentPackageName.isBlank()) "包号" else currentPackageName
+    }
+    btnPackageMenu.text = if (text.length > 6) text.take(6) + "…" else text
 }
+
+
 
 fun MainActivity.ensurePackageSelected(): Boolean {
     if (currentProjectId <= 0L) {
@@ -41,9 +47,17 @@ fun MainActivity.clearAllPackageMaps() {
     packageFastRowsMap.clear()
     packageCurrentFastRowMap.clear()
     packageDateMap.clear()
+
+    savedStandardRows.clear()
+    currentStandardRow = StandardRow()
+    savedFastRows.clear()
+    currentFastRow = FastRow()
+
     currentPackageName = ""
     updatePackageButtonText()
+    updateBuildingButtonText()
 }
+
 
 fun MainActivity.saveScreenDataToCurrentPackage() {
     if (currentPackageName.isBlank()) return
@@ -85,8 +99,11 @@ fun MainActivity.loadPackageToScreen(packageName: String) {
     pendingReplaceCurrentFastModel = false
     pendingReplaceCurrentStandardModel = false
 
-    updateDisplayTable()
+    if (currentModeType == ModeType.STANDARD || currentModeType == ModeType.FAST) {
+        updateDisplayTable()
+    }
 }
+
 
 fun MainActivity.generateNextPackageName(): String {
     val maxIndex = getAllPackageNamesInOrder()
@@ -103,6 +120,95 @@ fun MainActivity.getAllPackageNamesInOrder(): List<String> {
     names.addAll(packageFastRowsMap.keys)
     return names.toList()
 }
+fun MainActivity.updateBuildingButtonText() {
+    val text = if (currentBuildingName.isBlank()) "楼栋" else currentBuildingName
+    btnBuildingMenu.text = if (text.length > 6) text.take(6) + "…" else text
+}
+
+
+fun MainActivity.getAllBuildingNamesInOrder(): List<String> {
+    val names = linkedSetOf<String>()
+    if (currentBuildingName.isNotBlank()) names.add(currentBuildingName)
+    names.addAll(buildingStandardContentMap.keys)
+    names.addAll(buildingFastContentMap.keys)
+    names.addAll(buildingLoadingContentMap.keys)
+    return names.toList()
+}
+
+fun MainActivity.saveCurrentBuildingScopeToMemory() {
+    val safeBuildingName = if (currentBuildingName.isBlank()) "1号楼" else currentBuildingName
+
+    if (currentBuildingName.isBlank()) {
+        currentBuildingName = safeBuildingName
+        updateBuildingButtonText()
+    }
+
+    saveScreenDataToCurrentPackage()
+    saveLoadingScreenToCurrentTrip()
+
+    buildingStandardContentMap[safeBuildingName] = serializeStandardContent()
+    buildingFastContentMap[safeBuildingName] = serializeFastContent()
+    buildingLoadingContentMap[safeBuildingName] = serializeLoadingContent()
+}
+
+
+fun MainActivity.loadBuildingScopeToScreen(
+    buildingName: String,
+    saveCurrentFirst: Boolean = true
+) {
+    if (saveCurrentFirst) {
+        saveCurrentBuildingScopeToMemory()
+    }
+
+    currentBuildingName = if (buildingName.isBlank()) "1号楼" else buildingName
+    updateBuildingButtonText()
+
+    clearAllPackageMaps()
+    loadingTripMap.clear()
+    loadingAluminumRows.clear()
+    loadingIronRows.clear()
+    currentLoadingTripName = ""
+    vehicleInfo = VehicleInfo()
+
+    savedStandardRows.clear()
+    currentStandardRow = StandardRow()
+    savedFastRows.clear()
+    currentFastRow = FastRow()
+
+    deserializePackageStandardContent(buildingStandardContentMap[currentBuildingName].orEmpty())
+    deserializePackageFastContent(buildingFastContentMap[currentBuildingName].orEmpty())
+    deserializeLoadingContent(buildingLoadingContentMap[currentBuildingName].orEmpty())
+
+    val allNames = linkedSetOf<String>()
+    allNames.addAll(packageStandardRowsMap.keys)
+    allNames.addAll(packageFastRowsMap.keys)
+    allNames.addAll(packageCurrentStandardRowMap.keys)
+    allNames.addAll(packageCurrentFastRowMap.keys)
+
+    if (allNames.isEmpty()) {
+        currentPackageName = ""
+        savedStandardRows.clear()
+        currentStandardRow = StandardRow()
+        savedFastRows.clear()
+        currentFastRow = FastRow()
+        updatePackageButtonText()
+    } else {
+        if (currentPackageName.isBlank() || !allNames.contains(currentPackageName)) {
+            currentPackageName = allNames.first()
+        }
+        loadPackageToScreen(currentPackageName)
+    }
+
+    if (currentLoadingTripName.isBlank() || !loadingTripMap.containsKey(currentLoadingTripName)) {
+        currentLoadingTripName = loadingTripMap.keys.firstOrNull().orEmpty()
+    }
+
+    updatePackageButtonText()
+    switchMode(currentModeType)
+}
+
+
+
 
 fun MainActivity.resetForNewProjectWithoutPackage() {
     clearAllPackageMaps()
@@ -125,6 +231,8 @@ fun MainActivity.resetForNewProjectWithoutPackage() {
     currentFastActiveField = FastField.WIDTH
     lastFastField = FastField.WIDTH
 
+    updateBuildingButtonText()
     updatePackageButtonText()
     updateDisplayTable()
+
 }

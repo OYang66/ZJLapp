@@ -579,6 +579,75 @@ fun MainActivity.requestExportFolderAndExport() {
     }
 }
 
+fun MainActivity.shareLoadingSummaryProject() {
+    if (currentProjectId <= 0) {
+        toast("请先选择项目")
+        return
+    }
+
+    ioExecutor.execute {
+        try {
+            saveCurrentBuildingScopeToMemory()
+
+            val fileName = buildExcelFileName("${currentProjectName}_返厂汇总")
+            val excelBytes = buildLoadingSummaryExcelBytes(currentProjectName)
+
+            val shareDir = File(cacheDir, "share")
+            if (!shareDir.exists()) {
+                shareDir.mkdirs()
+            }
+
+            val file = File(shareDir, fileName)
+            file.writeBytes(excelBytes)
+
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+
+            runOnUiThread {
+                try {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = getExcelMimeType(fileName)
+                        putExtra(Intent.EXTRA_SUBJECT, fileName)
+                        putExtra(Intent.EXTRA_TITLE, fileName)
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri(fileName, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+
+                    val chooserIntent = Intent.createChooser(shareIntent, "分享到")
+
+                    val resInfoList = packageManager.queryIntentActivities(
+                        chooserIntent,
+                        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                    )
+
+                    for (resolveInfo in resInfoList) {
+                        val targetPackageName = resolveInfo.activityInfo.packageName
+                        grantUriPermission(
+                            targetPackageName,
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+
+                    startActivity(chooserIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    toast("分享失败：${e.message ?: "未知错误"}")
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            runOnUiThread {
+                toast("返厂汇总表失败：${e.message ?: "未知错误"}")
+            }
+        }
+    }
+}
 
  fun MainActivity.buildFastExcelBytes(projectName: String): ByteArray {
     saveScreenDataToCurrentPackage()

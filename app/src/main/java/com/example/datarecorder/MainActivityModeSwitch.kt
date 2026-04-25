@@ -47,13 +47,21 @@ fun MainActivity.switchMode(mode: ModeType) {
 
     when (mode) {
         ModeType.STANDARD -> {
-            btnPackageMenu.text = if (currentPackageName.isBlank()) "包号" else currentPackageName
-            updateDisplayTable()
+            if (currentPackageName.isNotBlank()) {
+                loadPackageToScreen(currentPackageName)
+            } else {
+                updatePackageButtonText()
+                updateDisplayTable()
+            }
         }
 
         ModeType.FAST -> {
-            btnPackageMenu.text = if (currentPackageName.isBlank()) "包号" else currentPackageName
-            updateDisplayTable()
+            if (currentPackageName.isNotBlank()) {
+                loadPackageToScreen(currentPackageName)
+            } else {
+                updatePackageButtonText()
+                updateDisplayTable()
+            }
         }
 
         ModeType.RETURN_LOADING -> {

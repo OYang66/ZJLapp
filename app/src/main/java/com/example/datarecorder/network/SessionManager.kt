@@ -10,6 +10,10 @@ object SessionManager {
     private const val KEY_USER_ID = "user_id"
     private const val KEY_LOGOUT_REASON = "logout_reason"
 
+    private const val KEY_REMEMBER = "remember_account_password"
+    private const val KEY_SAVED_USERNAME = "saved_username"
+    private const val KEY_SAVED_PASSWORD = "saved_password"
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
@@ -54,5 +58,32 @@ object SessionManager {
             .remove(KEY_USER_ID)
             .apply()
     }
-}
 
+    fun saveRememberedAccount(context: Context, username: String, password: String) {
+        prefs(context).edit()
+            .putBoolean(KEY_REMEMBER, true)
+            .putString(KEY_SAVED_USERNAME, username)
+            .putString(KEY_SAVED_PASSWORD, password)
+            .apply()
+    }
+
+    fun clearRememberedAccount(context: Context) {
+        prefs(context).edit()
+            .putBoolean(KEY_REMEMBER, false)
+            .remove(KEY_SAVED_USERNAME)
+            .remove(KEY_SAVED_PASSWORD)
+            .apply()
+    }
+
+    fun isRememberEnabled(context: Context): Boolean {
+        return prefs(context).getBoolean(KEY_REMEMBER, false)
+    }
+
+    fun getSavedUsername(context: Context): String {
+        return prefs(context).getString(KEY_SAVED_USERNAME, "") ?: ""
+    }
+
+    fun getSavedPassword(context: Context): String {
+        return prefs(context).getString(KEY_SAVED_PASSWORD, "") ?: ""
+    }
+}

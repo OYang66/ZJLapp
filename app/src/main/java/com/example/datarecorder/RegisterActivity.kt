@@ -1,6 +1,7 @@
 package com.example.datarecorder
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -17,15 +18,19 @@ class RegisterActivity : AppCompatActivity() {
     private lateinit var etPassword: EditText
     private lateinit var btnRegister: Button
     private lateinit var btnGoLogin: Button
+    private lateinit var btnViewTutorial: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_register)
 
+        RetrofitClient.init(applicationContext)
+
         etUsername = findViewById(R.id.etUsername)
         etPassword = findViewById(R.id.etPassword)
         btnRegister = findViewById(R.id.btnRegister)
         btnGoLogin = findViewById(R.id.btnGoLogin)
+        btnViewTutorial = findViewById(R.id.btnViewTutorial)
 
         btnRegister.setOnClickListener {
             doRegister()
@@ -35,6 +40,10 @@ class RegisterActivity : AppCompatActivity() {
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
         }
+
+        btnViewTutorial.setOnClickListener {
+            openTutorial()
+        }
     }
 
     private fun doRegister() {
@@ -42,7 +51,7 @@ class RegisterActivity : AppCompatActivity() {
         val password = etPassword.text.toString().trim()
 
         if (username.isEmpty()) {
-            Toast.makeText(this, "请输入用户名", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请输入真实姓名", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -51,8 +60,8 @@ class RegisterActivity : AppCompatActivity() {
             return
         }
 
-        if (username.length < 3) {
-            Toast.makeText(this, "用户名至少3位", Toast.LENGTH_SHORT).show()
+        if (username.length < 2) {
+            Toast.makeText(this, "姓名至少2位", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -63,31 +72,58 @@ class RegisterActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val response = RetrofitClient.api.register(
+                val checkResponse = RetrofitClient.api.checkRegisterAccount(username)
+                if (checkResponse.code != 200) {
+                    Toast.makeText(
+                        this@RegisterActivity,
+                        checkResponse.message ?: "该账号不允许注册",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val registerResponse = RetrofitClient.api.register(
                     RegisterRequest(
                         username = username,
                         password = password
                     )
                 )
 
-                if (response.code == 200) {
-                    Toast.makeText(this@RegisterActivity, response.message, Toast.LENGTH_SHORT).show()
+                if (registerResponse.code == 200) {
+                    Toast.makeText(
+                        this@RegisterActivity,
+                        registerResponse.message ?: "注册成功",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    SessionManager.saveRememberedAccount(
+                        this@RegisterActivity,
+                        username,
+                        password
+                    )
+
                     startActivity(Intent(this@RegisterActivity, LoginActivity::class.java))
                     finish()
                 } else {
                     Toast.makeText(
                         this@RegisterActivity,
-                        response.message.ifBlank { "注册失败" },
+                        registerResponse.message ?: "注册失败",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
             } catch (e: Exception) {
                 Toast.makeText(
                     this@RegisterActivity,
-                    "网络异常，请稍后重试",
-                    Toast.LENGTH_SHORT
+                    "网络异常：" + (e.message ?: "请稍后重试"),
+                    Toast.LENGTH_LONG
                 ).show()
+                e.printStackTrace()
             }
         }
+    }
+
+    private fun openTutorial() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
+        startActivity(intent)
     }
 }

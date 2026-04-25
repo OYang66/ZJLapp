@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.datarecorder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 14
-        versionName = "1.8.0"
+        versionCode = 16
+        versionName = "1.9.1"
     }
 
     buildFeatures {

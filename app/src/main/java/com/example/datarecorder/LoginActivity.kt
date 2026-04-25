@@ -1,8 +1,10 @@
 package com.example.datarecorder
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -17,15 +19,27 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var etPassword: EditText
     private lateinit var btnLogin: Button
     private lateinit var btnGoRegister: Button
+    private lateinit var btnViewTutorial: Button
+    private lateinit var cbRemember: CheckBox
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
+        RetrofitClient.init(applicationContext)
+
         etUsername = findViewById(R.id.etUsername)
         etPassword = findViewById(R.id.etPassword)
         btnLogin = findViewById(R.id.btnLogin)
         btnGoRegister = findViewById(R.id.btnGoRegister)
+        btnViewTutorial = findViewById(R.id.btnViewTutorial)
+        cbRemember = findViewById(R.id.cbRemember)
+
+        if (SessionManager.isRememberEnabled(this)) {
+            cbRemember.isChecked = true
+            etUsername.setText(SessionManager.getSavedUsername(this))
+            etPassword.setText(SessionManager.getSavedPassword(this))
+        }
 
         val logoutReason = SessionManager.consumeLogoutReason(this)
         if (logoutReason.isNotBlank()) {
@@ -39,6 +53,10 @@ class LoginActivity : AppCompatActivity() {
         btnGoRegister.setOnClickListener {
             startActivity(Intent(this, RegisterActivity::class.java))
             finish()
+        }
+
+        btnViewTutorial.setOnClickListener {
+            openTutorial()
         }
     }
 
@@ -67,17 +85,29 @@ class LoginActivity : AppCompatActivity() {
 
                 if (response.code == 200 && response.data != null) {
                     val data = response.data
+
                     SessionManager.saveLogin(
                         this@LoginActivity,
                         data.token,
                         data.username,
                         data.userId
                     )
+
+                    if (cbRemember.isChecked) {
+                        SessionManager.saveRememberedAccount(
+                            this@LoginActivity,
+                            username,
+                            password
+                        )
+                    } else {
+                        SessionManager.clearRememberedAccount(this@LoginActivity)
+                    }
+
                     AccountStatusScheduler.start(this@LoginActivity)
 
                     Toast.makeText(
                         this@LoginActivity,
-                        response.message.ifBlank { "登录成功" },
+                        response.message?.ifBlank { "登录成功" } ?: "登录成功",
                         Toast.LENGTH_SHORT
                     ).show()
 
@@ -86,17 +116,23 @@ class LoginActivity : AppCompatActivity() {
                 } else {
                     Toast.makeText(
                         this@LoginActivity,
-                        response.message.ifBlank { "登录失败" },
+                        response.message?.ifBlank { "登录失败" } ?: "登录失败",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
             } catch (e: Exception) {
                 Toast.makeText(
                     this@LoginActivity,
-                    "网络异常，请稍后重试",
-                    Toast.LENGTH_SHORT
+                    "网络异常：" + (e.message ?: "请稍后重试"),
+                    Toast.LENGTH_LONG
                 ).show()
+                e.printStackTrace()
             }
         }
+    }
+
+    private fun openTutorial() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
+        startActivity(intent)
     }
 }

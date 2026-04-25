@@ -17,6 +17,417 @@ import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.HorizontalScrollView
 import org.apache.poi.ss.util.RegionUtil
+import org.apache.poi.ss.usermodel.Sheet
+import org.json.JSONArray
+import org.json.JSONObject
+
+
+
+private data class LoadingSummaryTripItem(
+    val buildingName: String,
+    val tripName: String,
+    val vehicleInfo: VehicleInfo,
+    val aluminumRows: List<ReturnLoadingRow>,
+    val ironRows: List<ReturnLoadingRow>
+)
+
+private fun parseSummaryTripItemsFromLoadingContent(
+    content: String,
+    buildingName: String
+): List<LoadingSummaryTripItem> {
+    if (content.isBlank()) return emptyList()
+
+    return try {
+        val root = JSONObject(content)
+        val trips = root.optJSONArray("trips") ?: JSONArray()
+        val result = mutableListOf<LoadingSummaryTripItem>()
+
+        for (i in 0 until trips.length()) {
+            val obj = trips.getJSONObject(i)
+            val tripName = obj.optString("tripName", "")
+            if (tripName.isBlank()) continue
+
+            val aluminumRows = mutableListOf<ReturnLoadingRow>()
+            val ironRows = mutableListOf<ReturnLoadingRow>()
+
+            val alArray = obj.optJSONArray("aluminumRows") ?: JSONArray()
+            for (j in 0 until alArray.length()) {
+                val rowObj = alArray.getJSONObject(j)
+                aluminumRows.add(
+                    ReturnLoadingRow(
+                        type = ReturnLoadingType.ALUMINUM,
+                        materialName = rowObj.optString("materialName"),
+                        packageOrCount = rowObj.optString("packageOrCount"),
+                        areaOrWeight = rowObj.optString("areaOrWeight"),
+                        weight = rowObj.optString("weight"),
+                        remark = rowObj.optString("remark")
+                    )
+                )
+            }
+
+            val ironArray = obj.optJSONArray("ironRows") ?: JSONArray()
+            for (j in 0 until ironArray.length()) {
+                val rowObj = ironArray.getJSONObject(j)
+                ironRows.add(
+                    ReturnLoadingRow(
+                        type = ReturnLoadingType.IRON,
+                        materialName = rowObj.optString("materialName"),
+                        packageOrCount = rowObj.optString("packageOrCount"),
+                        areaOrWeight = rowObj.optString("areaOrWeight"),
+                        weight = rowObj.optString("weight"),
+                        remark = rowObj.optString("remark")
+                    )
+                )
+            }
+
+            val vehicleObj = obj.optJSONObject("vehicleInfo") ?: JSONObject()
+            val vehicle = VehicleInfo(
+                grossWeight = vehicleObj.optString("grossWeight"),
+                tareWeight = vehicleObj.optString("tareWeight"),
+                middleAluminumWeight = vehicleObj.optString("middleAluminumWeight"),
+                middleIronWeight = vehicleObj.optString("middleIronWeight"),
+                woodEstimate = vehicleObj.optString("woodEstimate"),
+                vehiclePlateNumber = vehicleObj.optString("vehiclePlateNumber"),
+                loadingDate = vehicleObj.optString("loadingDate")
+            )
+
+            result.add(
+                LoadingSummaryTripItem(
+                    buildingName = buildingName,
+                    tripName = tripName,
+                    vehicleInfo = vehicle,
+                    aluminumRows = aluminumRows,
+                    ironRows = ironRows
+                )
+            )
+        }
+
+        result
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+private fun sumRowWeights(rows: List<ReturnLoadingRow>): Double {
+    return rows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
+}
+
+private fun sumRowArea(rows: List<ReturnLoadingRow>): Double {
+    return rows.sumOf { it.areaOrWeight.toDoubleOrNull() ?: 0.0 }
+}
+
+private fun sumIronWeightByMaterial(rows: List<ReturnLoadingRow>, name: String): Double {
+    return rows
+        .filter { it.materialName.trim() == name }
+        .sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
+}
+
+private fun sumIronQuantityByMaterial(rows: List<ReturnLoadingRow>, name: String): Double {
+    return rows
+        .filter { it.materialName.trim() == name }
+        .sumOf { it.areaOrWeight.toDoubleOrNull() ?: 0.0 }
+}
+
+private fun resolveIronSummaryUnit(materialName: String): String {
+    val name = materialName.trim()
+    return when {
+        name == "销钉销片" || name == "铁钩铁锤" -> "套"
+        name == "单支撑" || name == "斜撑" || name == "拉片小斜撑" || name == "对拉螺杆" -> "根"
+        else -> "个"
+    }
+}
+
+private fun parseLoadingDateForSort(dateText: String): Long {
+    if (dateText.isBlank()) return Long.MAX_VALUE
+    return try {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateText)?.time ?: Long.MAX_VALUE
+    } catch (_: Exception) {
+        Long.MAX_VALUE
+    }
+}
+
+fun MainActivity.buildLoadingSummaryExcelBytes(projectName: String): ByteArray {
+    saveCurrentBuildingScopeToMemory()
+
+    val allItems = mutableListOf<LoadingSummaryTripItem>()
+    getAllBuildingNamesInOrder().forEach { buildingName ->
+        val content = buildingLoadingContentMap[buildingName].orEmpty()
+        allItems.addAll(parseSummaryTripItemsFromLoadingContent(content, buildingName))
+    }
+
+    allItems.sortWith(
+        compareBy<LoadingSummaryTripItem> { parseLoadingDateForSort(it.vehicleInfo.loadingDate) }
+            .thenBy { it.buildingName }
+            .thenBy { it.tripName }
+    )
+
+
+    val customIronNames = allItems
+        .flatMap { item -> item.ironRows.map { row -> row.materialName.trim() } }
+        .filter { it.isNotBlank() && it != "背楞" && it != "吊架" }
+        .distinct()
+
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("返厂汇总")
+
+    val integerFormat = workbook.createDataFormat().getFormat("0")
+    val decimalFormat = workbook.createDataFormat().getFormat("0.##")
+
+
+    val titleFont = workbook.createFont().apply {
+        bold = true
+        fontHeightInPoints = 14
+    }
+
+    val boldFont = workbook.createFont().apply {
+        bold = true
+        fontHeightInPoints = 11
+    }
+
+    val normalFont = workbook.createFont().apply {
+        bold = false
+        fontHeightInPoints = 11
+    }
+
+    val titleStyle = workbook.createCellStyle().apply {
+        alignment = HorizontalAlignment.CENTER
+        verticalAlignment = VerticalAlignment.CENTER
+        borderTop = BorderStyle.THIN
+        borderBottom = BorderStyle.THIN
+        borderLeft = BorderStyle.THIN
+        borderRight = BorderStyle.THIN
+        setFont(titleFont)
+    }
+
+    val headerStyle = workbook.createCellStyle().apply {
+        alignment = HorizontalAlignment.CENTER
+        verticalAlignment = VerticalAlignment.CENTER
+        borderTop = BorderStyle.THIN
+        borderBottom = BorderStyle.THIN
+        borderLeft = BorderStyle.THIN
+        borderRight = BorderStyle.THIN
+        wrapText = true
+        setFont(boldFont)
+    }
+
+    val bodyTextStyle = workbook.createCellStyle().apply {
+        alignment = HorizontalAlignment.CENTER
+        verticalAlignment = VerticalAlignment.CENTER
+        borderTop = BorderStyle.THIN
+        borderBottom = BorderStyle.THIN
+        borderLeft = BorderStyle.THIN
+        borderRight = BorderStyle.THIN
+        wrapText = true
+        setFont(normalFont)
+    }
+
+    val bodyIntegerStyle = workbook.createCellStyle().apply {
+        cloneStyleFrom(bodyTextStyle)
+        dataFormat = integerFormat
+    }
+    val bodyDecimalStyle = workbook.createCellStyle().apply {
+        cloneStyleFrom(bodyTextStyle)
+        dataFormat = decimalFormat
+    }
+
+    val boldTextStyle = workbook.createCellStyle().apply {
+        alignment = HorizontalAlignment.CENTER
+        verticalAlignment = VerticalAlignment.CENTER
+        borderTop = BorderStyle.THIN
+        borderBottom = BorderStyle.THIN
+        borderLeft = BorderStyle.THIN
+        borderRight = BorderStyle.THIN
+        wrapText = true
+        setFont(boldFont)
+    }
+
+    val boldIntegerStyle = workbook.createCellStyle().apply {
+        cloneStyleFrom(boldTextStyle)
+        dataFormat = integerFormat
+    }
+    val boldDecimalStyle = workbook.createCellStyle().apply {
+        cloneStyleFrom(boldTextStyle)
+        dataFormat = decimalFormat
+    }
+
+    fun row(index: Int, height: Float = 35f) = (sheet.getRow(index) ?: sheet.createRow(index)).apply {
+        heightInPoints = height
+    }
+
+    fun fill(rowIndex: Int, start: Int, end: Int, style: XSSFCellStyle, height: Float = 35f) {
+        val r = row(rowIndex, height)
+        for (i in start..end) {
+            val c = r.getCell(i) ?: r.createCell(i)
+            c.cellStyle = style
+        }
+    }
+
+    fun setText(rowIndex: Int, col: Int, value: String, style: XSSFCellStyle = bodyTextStyle) {
+        val r = row(rowIndex)
+        val c = r.getCell(col) ?: r.createCell(col)
+        c.setCellValue(value)
+        c.cellStyle = style
+    }
+
+    fun setNumber(
+        rowIndex: Int,
+        col: Int,
+        value: Double?,
+        style: XSSFCellStyle = bodyDecimalStyle,
+        blankWhenZero: Boolean = false
+    ) {
+        val r = row(rowIndex)
+        val c = r.getCell(col) ?: r.createCell(col)
+        if (value == null || (blankWhenZero && value == 0.0)) {
+            c.setBlank()
+        } else {
+            c.setCellValue(value)
+        }
+        c.cellStyle = style
+    }
+
+
+    val fixedColumns = listOf(
+        "序号",
+        "楼栋号",
+        "返厂日期",
+        "车牌号",
+        "铝模板重量（kg）",
+        "铝模板面积（㎡）",
+        "铁件总重量（kg）",
+        "背楞重量（kg）",
+        "吊架重量（kg）"
+    )
+
+    val allColumns = fixedColumns + customIronNames
+
+    allColumns.forEachIndexed { index, _ ->
+        sheet.setColumnWidth(index, 12 * 256)
+    }
+    if (allColumns.lastIndex >= 8) {
+        sheet.setColumnWidth(8, 14 * 256)
+    }
+
+
+    // 标题
+    fill(0, 0, allColumns.lastIndex.coerceAtLeast(0), titleStyle, 35f)
+    setText(0, 0, "返厂汇总表", titleStyle)
+    safeMerge(sheet, 0, 0, 0, allColumns.lastIndex.coerceAtLeast(0))
+
+    // 项目信息
+    fill(1, 0, allColumns.lastIndex.coerceAtLeast(0), boldTextStyle, 40f)
+    setText(1, 0, "项目名称：", boldTextStyle)
+    setText(1, 1, projectName, boldTextStyle)
+    safeMerge(sheet, 1, 1, 1, 3)
+    setText(1, 4, "编制日期：", boldTextStyle)
+    setText(1, 5, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date()), boldTextStyle)
+    safeMerge(sheet, 1, 1, 5, 7)
+    setText(1, 8, "项目负责人：", boldTextStyle)
+    if (allColumns.lastIndex >= 9) {
+        safeMerge(sheet, 1, 1, 9, allColumns.lastIndex)
+    }
+
+    // 表头行
+    fill(2, 0, allColumns.lastIndex.coerceAtLeast(0), headerStyle, 35f)
+    allColumns.forEachIndexed { index, name ->
+        setText(2, index, name, headerStyle)
+    }
+
+    // 单位行（新增）
+    fill(3, 0, allColumns.lastIndex.coerceAtLeast(0), headerStyle, 35f)
+
+    // 序号到吊架重量列之间纵向合并
+    for (col in 0..8.coerceAtMost(allColumns.lastIndex)) {
+        safeMerge(sheet, 2, 3, col, col)
+        setText(2, col, fixedColumns[col], headerStyle)
+    }
+
+    // 动态铁物料单位行
+    customIronNames.forEachIndexed { customIndex, materialName ->
+        val col = 9 + customIndex
+        setText(2, col, materialName, headerStyle)
+        setText(3, col, resolveIronSummaryUnit(materialName), headerStyle)
+    }
+
+    var rowIndex = 4
+    allItems.forEachIndexed { index, item ->
+        fill(rowIndex, 0, allColumns.lastIndex.coerceAtLeast(0), bodyTextStyle, 35f)
+
+        val aluminumSingleWeight = sumRowWeights(item.aluminumRows)
+        val ironSingleWeight = sumRowWeights(item.ironRows)
+
+        val aluminumDisplayWeight = if (aluminumSingleWeight == 0.0) {
+            item.vehicleInfo.aluminumWeight()
+        } else {
+            aluminumSingleWeight
+        }
+
+        val ironDisplayWeight = if (ironSingleWeight == 0.0) {
+            item.vehicleInfo.ironWeight()
+        } else {
+            ironSingleWeight
+        }
+
+        setNumber(rowIndex, 0, (index + 1).toDouble(), bodyIntegerStyle)
+        setText(rowIndex, 1, item.buildingName, bodyTextStyle)
+        setText(rowIndex, 2, item.vehicleInfo.loadingDate, bodyTextStyle)
+        setText(rowIndex, 3, item.vehicleInfo.vehiclePlateNumber, bodyTextStyle)
+        setNumber(rowIndex, 4, aluminumDisplayWeight, bodyIntegerStyle)
+        setNumber(rowIndex, 5, sumRowArea(item.aluminumRows), bodyIntegerStyle, blankWhenZero = true)
+        setNumber(rowIndex, 6, ironDisplayWeight, bodyIntegerStyle)
+        setNumber(rowIndex, 7, sumIronWeightByMaterial(item.ironRows, "背楞"), bodyIntegerStyle, blankWhenZero = true)
+        setNumber(rowIndex, 8, sumIronWeightByMaterial(item.ironRows, "吊架"), bodyIntegerStyle, blankWhenZero = true)
+
+
+
+        customIronNames.forEachIndexed { customIndex, materialName ->
+            val value = sumIronQuantityByMaterial(item.ironRows, materialName)
+            setNumber(rowIndex, 9 + customIndex, value, bodyIntegerStyle, blankWhenZero = true)
+        }
+
+
+        rowIndex++
+    }
+
+    // 合计行
+    fill(rowIndex, 0, allColumns.lastIndex.coerceAtLeast(0), boldTextStyle, 35f)
+    setText(rowIndex, 0, "合计", boldTextStyle)
+    safeMerge(sheet, rowIndex, rowIndex, 0, 3)
+
+    val totalAlWeight = allItems.sumOf {
+        val single = sumRowWeights(it.aluminumRows)
+        if (single == 0.0) it.vehicleInfo.aluminumWeight() else single
+    }
+    val totalAlArea = allItems.sumOf { sumRowArea(it.aluminumRows) }
+    val totalIronWeight = allItems.sumOf {
+        val single = sumRowWeights(it.ironRows)
+        if (single == 0.0) it.vehicleInfo.ironWeight() else single
+    }
+    val totalBack = allItems.sumOf { sumIronWeightByMaterial(it.ironRows, "背楞") }
+    val totalHanger = allItems.sumOf { sumIronWeightByMaterial(it.ironRows, "吊架") }
+
+    setNumber(rowIndex, 4, totalAlWeight, boldIntegerStyle)
+    setNumber(rowIndex, 5, totalAlArea, boldIntegerStyle)
+    setNumber(rowIndex, 6, totalIronWeight, boldIntegerStyle)
+    setNumber(rowIndex, 7, totalBack, boldIntegerStyle)
+    setNumber(rowIndex, 8, totalHanger, boldIntegerStyle)
+
+
+
+    customIronNames.forEachIndexed { customIndex, materialName ->
+        val total = allItems.sumOf { sumIronQuantityByMaterial(it.ironRows, materialName) }
+        setNumber(rowIndex, 9 + customIndex, total, boldIntegerStyle, blankWhenZero = true)
+    }
+
+
+    applyOuterMediumBorder(sheet, 0, rowIndex, 0, allColumns.lastIndex.coerceAtLeast(0))
+
+    return ByteArrayOutputStream().use { output ->
+        workbook.write(output)
+        workbook.close()
+        output.toByteArray()
+    }
+}
 
 
 private fun applyOuterMediumBorder(
@@ -121,6 +532,9 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
     tripNames.forEach { tripName ->
         val tripData = loadingTripMap[tripName] ?: ReturnLoadingTripData(tripName = tripName)
         val vehicle = tripData.vehicleInfo
+        val aluminumWeightMode = tripData.aluminumWeightMode
+        val ironWeightMode = tripData.ironWeightMode
+
         val sheet = workbook.createSheet(tripName)
 
         val titleFont = workbook.createFont().apply {
@@ -221,8 +635,9 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
         safeMerge(sheet, 2, 2, 0, 1)
         set(2, 2, "○是")
         set(2, 3, "○否")
-        set(2, 4, "统计时间")
-        set(2, 5, SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault()).format(Date()))
+        set(2, 4, "装车时间")
+        set(2, 5, vehicle.loadingDate)
+
         safeMerge(sheet, 2, 2, 5, 8)
 
         // 铝件表头
@@ -252,17 +667,18 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
         val aluminumWeightSum = aluminumRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
         val ironWeightSum = ironRows.sumOf { it.weight.toDoubleOrNull() ?: 0.0 }
 
-        val aluminumExcelWeightTotal = if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+        val aluminumExcelWeightTotal = if (aluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
             vehicle.aluminumWeight()
         } else {
             aluminumWeightSum
         }
 
-        val ironExcelWeightTotal = if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
+        val ironExcelWeightTotal = if (ironWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) {
             vehicle.ironWeight()
         } else {
             ironWeightSum
         }
+
 
 
         // 铝件数据
@@ -272,13 +688,15 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
             set(rowIndex, 1, item.materialName)
             set(rowIndex, 2, item.packageOrCount)
             set(rowIndex, 3, item.areaOrWeight)
-            set(rowIndex, 4, if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
+            set(rowIndex, 4, if (aluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
+
             safeMerge(sheet, rowIndex, rowIndex, 5, 8)
             set(rowIndex, 5, item.remark)
             rowIndex++
         }
 
-        if (loadingAluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && aluminumRows.isNotEmpty()) {
+        if (aluminumWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && aluminumRows.isNotEmpty()) {
+
             safeMerge(sheet, aluminumStart, rowIndex - 1, 4, 4)
             set(aluminumStart, 4, formatLoadingNumber(vehicle.aluminumWeight()))
         }
@@ -332,13 +750,15 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
             set(rowIndex, 1, item.materialName)
             set(rowIndex, 2, item.packageOrCount)
             set(rowIndex, 3, item.areaOrWeight)
-            set(rowIndex, 4, if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
+            set(rowIndex, 4, if (ironWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL) "" else item.weight)
+
             safeMerge(sheet, rowIndex, rowIndex, 5, 8)
             set(rowIndex, 5, item.remark)
             rowIndex++
         }
 
-        if (loadingIronWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && ironRows.isNotEmpty()) {
+        if (ironWeightMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL && ironRows.isNotEmpty()) {
+
             safeMerge(sheet, ironStart, rowIndex - 1, 4, 4)
             set(ironStart, 4, formatLoadingNumber(vehicle.ironWeight()))
         }
@@ -411,6 +831,7 @@ fun MainActivity.buildLoadingExcelBytes(projectName: String): ByteArray {
         // 运输信息
         fill(rowIndex)
         set(rowIndex, 0, "运输车牌号")
+        set(rowIndex, 1, vehicle.vehiclePlateNumber)
         safeMerge(sheet, rowIndex, rowIndex, 1, 3)
         set(rowIndex, 4, "司机确认")
         safeMerge(sheet, rowIndex, rowIndex, 5, 8)

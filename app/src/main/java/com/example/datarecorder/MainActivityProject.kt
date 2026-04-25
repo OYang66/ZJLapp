@@ -92,53 +92,27 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
     popup.show()
 }
 
-
 suspend fun MainActivity.createProjectInternal(name: String, buildingName: String) {
+    if (currentProjectId > 0L) {
+        saveCurrentProjectContentNow()
+    }
+
     val newId = withContext(Dispatchers.IO) {
         repository.createProject(name, buildingName)
     }
 
-    val project = withContext(Dispatchers.IO) {
-        repository.getAllProjects().firstOrNull { it.id == newId }
-    }
-
-    if (project != null) {
-        switchProject(project)
-        currentBuildingName = buildingName
-        resetForNewProjectWithoutPackage()
-        saveCurrentProjectContent()
-        toast("已创建项目：$name")
-    }
+    switchProjectById(newId)
+    toast("已创建项目：$name")
 }
-fun MainActivity.switchProject(project: ProjectEntity) {
-    saveScreenDataToCurrentPackage()
-    saveLoadingScreenToCurrentTrip()
 
-    currentProjectId = project.id
-    currentProjectName = project.name
-    currentBuildingName = project.buildingName
-    tvProjectName.text = "当前项目：$currentProjectName"
 
-    getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-        .edit()
-        .putLong("last_project_id", currentProjectId)
-        .apply()
-
-    clearStandardEditingState()
-    clearFastEditingState()
-    pendingReplaceStandardEditing = false
-    pendingReplaceFastEditing = false
-    pendingReplaceCurrentFastModel = false
-    pendingReplaceCurrentStandardModel = false
-
-    rebuildPackageMapsFromProject(project)
-    deserializeLoadingContent(project.loadingContent)
-
-    updatePackageButtonText()
-    switchMode(currentModeType)
-}
 
 suspend fun MainActivity.deleteProjectInternal(project: ProjectEntity) {
+    // 删除前先保存当前项目
+    if (currentProjectId > 0L) {
+        saveCurrentProjectContentNow()
+    }
+
     withContext(Dispatchers.IO) {
         repository.deleteProject(project)
     }
@@ -153,10 +127,10 @@ suspend fun MainActivity.deleteProjectInternal(project: ProjectEntity) {
             switchProject(nextProject)
         } else {
             val newId = withContext(Dispatchers.IO) {
-                repository.createProject("默认项目", "1号楼")
+                repository.createProject("默认项目", "1#")
             }
             val newProject = withContext(Dispatchers.IO) {
-                repository.getAllProjects().firstOrNull { it.id == newId }
+                repository.getProjectById(newId)
             }
             if (newProject != null) {
                 switchProject(newProject)
@@ -400,7 +374,10 @@ fun MainActivity.serializeLoadingContent(): String {
         vehicleObj.put("middleAluminumWeight", trip.vehicleInfo.middleAluminumWeight)
         vehicleObj.put("middleIronWeight", trip.vehicleInfo.middleIronWeight)
         vehicleObj.put("woodEstimate", trip.vehicleInfo.woodEstimate)
+        vehicleObj.put("vehiclePlateNumber", trip.vehicleInfo.vehiclePlateNumber)
+        vehicleObj.put("loadingDate", trip.vehicleInfo.loadingDate)
         obj.put("vehicleInfo", vehicleObj)
+
 
         trips.put(obj)
     }
@@ -408,6 +385,260 @@ fun MainActivity.serializeLoadingContent(): String {
     root.put("trips", trips)
     return root.toString()
 }
+
+fun MainActivity.wrapBuildingScopedContent(
+    currentBuilding: String,
+    contentMap: Map<String, String>
+): String {
+    val root = JSONObject()
+    root.put("currentBuildingName", currentBuilding)
+
+    val buildings = JSONArray()
+    contentMap.forEach { (buildingName, content) ->
+        val obj = JSONObject()
+        obj.put("buildingName", buildingName)
+        obj.put("content", content)
+        buildings.put(obj)
+    }
+
+    root.put("buildings", buildings)
+    return root.toString()
+}
+
+fun MainActivity.parseBuildingScopedContent(
+    raw: String,
+    fallbackBuildingName: String
+): Pair<String, LinkedHashMap<String, String>> {
+    val result = linkedMapOf<String, String>()
+    val defaultBuilding = if (fallbackBuildingName.isBlank()) "1#" else fallbackBuildingName
+
+    if (raw.isBlank()) {
+        result[defaultBuilding] = ""
+        return defaultBuilding to result
+    }
+
+    return try {
+        val root = JSONObject(raw)
+        if (!root.has("buildings")) {
+            result[defaultBuilding] = raw
+            defaultBuilding to result
+        } else {
+            val current = root.optString("currentBuildingName", defaultBuilding)
+            val buildings = root.optJSONArray("buildings") ?: JSONArray()
+
+            for (i in 0 until buildings.length()) {
+                val obj = buildings.getJSONObject(i)
+                val buildingName = obj.optString("buildingName", "")
+                if (buildingName.isBlank()) continue
+                result[buildingName] = obj.optString("content", "")
+            }
+
+            if (result.isEmpty()) {
+                result[defaultBuilding] = ""
+            }
+
+            val safeCurrent = when {
+                current.isNotBlank() && result.containsKey(current) -> current
+                result.containsKey(defaultBuilding) -> defaultBuilding
+                result.isNotEmpty() -> result.keys.first()
+                else -> defaultBuilding
+            }
+
+            safeCurrent to result
+        }
+    } catch (_: Exception) {
+        result[defaultBuilding] = raw
+        defaultBuilding to result
+    }
+}
+
+
+fun MainActivity.serializeProjectStandardBuildingsContent(): String {
+    saveCurrentBuildingScopeToMemory()
+    return wrapBuildingScopedContent(currentBuildingName, buildingStandardContentMap)
+}
+
+fun MainActivity.serializeProjectFastBuildingsContent(): String {
+    saveCurrentBuildingScopeToMemory()
+    return wrapBuildingScopedContent(currentBuildingName, buildingFastContentMap)
+}
+
+fun MainActivity.serializeProjectLoadingBuildingsContent(): String {
+    saveCurrentBuildingScopeToMemory()
+    return wrapBuildingScopedContent(currentBuildingName, buildingLoadingContentMap)
+}
+
+fun MainActivity.showBuildingMenuPopup(anchor: View) {
+    if (currentProjectId <= 0L) {
+        toast("请先新建或选择项目")
+        return
+    }
+
+    val popup = PopupMenu(this, anchor)
+    var order = 0
+
+    getAllBuildingNamesInOrder().forEachIndexed { index, buildingName ->
+        popup.menu.add(0, 1000 + index, order++, buildingName)
+    }
+    popup.menu.add(0, 1, order++, "增加楼栋")
+    popup.menu.add(0, 2, order, "删除当前楼栋")
+
+    popup.setOnMenuItemClickListener { item ->
+        when {
+            item.itemId == 1 -> {
+                showCreateBuildingDialog()
+                true
+            }
+
+            item.itemId == 2 -> {
+                confirmDeleteCurrentBuilding()
+                true
+            }
+
+            item.itemId >= 1000 -> {
+                switchBuilding(item.title.toString())
+                true
+            }
+
+            else -> false
+        }
+    }
+    popup.show()
+}
+
+fun MainActivity.switchProject(project: ProjectEntity) {
+    lifecycleScope.launch {
+        switchProjectById(project.id)
+    }
+}
+
+
+suspend fun MainActivity.switchProjectById(projectId: Long) {
+    if (projectId <= 0L) return
+
+    if (currentProjectId > 0L) {
+        saveCurrentProjectContentNow()
+    }
+
+    val latestProject = withContext(Dispatchers.IO) {
+        repository.getProjectById(projectId)
+    } ?: run {
+        toast("项目不存在或已删除")
+        return
+    }
+
+    currentProjectId = latestProject.id
+    currentProjectName = latestProject.name
+    currentBuildingName = if (latestProject.buildingName.isBlank()) "1号楼" else latestProject.buildingName
+    tvProjectName.text = "当前项目：$currentProjectName"
+
+    getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putLong("last_project_id", currentProjectId)
+        .apply()
+
+    clearStandardEditingState()
+    clearFastEditingState()
+    pendingReplaceStandardEditing = false
+    pendingReplaceFastEditing = false
+    pendingReplaceCurrentFastModel = false
+    pendingReplaceCurrentStandardModel = false
+
+    rebuildPackageMapsFromProject(latestProject)
+}
+
+
+fun MainActivity.showCreateBuildingDialog() {
+    val input = android.widget.EditText(this).apply {
+        hint = "请输入楼栋号，如：2号楼"
+        isSingleLine = true
+    }
+
+    AlertDialog.Builder(this)
+        .setTitle("增加楼栋")
+        .setView(input)
+        .setNegativeButton("取消", null)
+        .setPositiveButton("确定", null)
+        .create()
+        .also { dialog ->
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val name = input.text.toString().trim()
+                    if (name.isBlank()) {
+                        toast("楼栋号不能为空")
+                        return@setOnClickListener
+                    }
+
+                    if (getAllBuildingNamesInOrder().contains(name)) {
+                        toast("楼栋已存在")
+                        return@setOnClickListener
+                    }
+
+                    saveCurrentBuildingScopeToMemory()
+                    buildingStandardContentMap[name] = ""
+                    buildingFastContentMap[name] = ""
+                    buildingLoadingContentMap[name] = ""
+                    switchBuilding(name)
+                    saveCurrentProjectContent()
+                    dialog.dismiss()
+                }
+            }
+            dialog.show()
+        }
+}
+
+fun MainActivity.switchBuilding(buildingName: String) {
+    if (buildingName.isBlank()) return
+
+    saveCurrentBuildingScopeToMemory()
+    loadBuildingScopeToScreen(buildingName)
+    saveCurrentProjectContent()
+}
+
+fun MainActivity.confirmDeleteCurrentBuilding() {
+    val target = currentBuildingName
+    if (target.isBlank()) {
+        toast("当前没有可删除的楼栋")
+        return
+    }
+
+    val allBuildings = getAllBuildingNamesInOrder()
+    if (allBuildings.size <= 1) {
+        toast("至少保留一个楼栋")
+        return
+    }
+
+    AlertDialog.Builder(this)
+        .setTitle("确认删除")
+        .setMessage("是否删除${target}数据？\n删除后无法恢复。")
+        .setNegativeButton("取消", null)
+        .setPositiveButton("删除") { _, _ ->
+            deleteCurrentBuilding()
+        }
+        .show()
+}
+
+fun MainActivity.deleteCurrentBuilding() {
+    val target = currentBuildingName
+    if (target.isBlank()) return
+
+    saveCurrentBuildingScopeToMemory()
+
+    val allBuildings = getAllBuildingNamesInOrder()
+    val oldIndex = allBuildings.indexOf(target)
+
+    buildingStandardContentMap.remove(target)
+    buildingFastContentMap.remove(target)
+    buildingLoadingContentMap.remove(target)
+
+    val remain = getAllBuildingNamesInOrder()
+    val nextBuilding = remain.getOrNull(oldIndex.coerceAtMost(remain.lastIndex)) ?: remain.first()
+
+    loadBuildingScopeToScreen(nextBuilding)
+    saveCurrentProjectContent()
+    toast("已删除：$target")
+}
+
 
 fun MainActivity.deserializeLoadingContent(content: String) {
     loadingTripMap.clear()
@@ -499,8 +730,11 @@ fun MainActivity.deserializeLoadingContent(content: String) {
             tareWeight = vehicleObj.optString("tareWeight"),
             middleAluminumWeight = vehicleObj.optString("middleAluminumWeight"),
             middleIronWeight = vehicleObj.optString("middleIronWeight"),
-            woodEstimate = vehicleObj.optString("woodEstimate")
+            woodEstimate = vehicleObj.optString("woodEstimate"),
+            vehiclePlateNumber = vehicleObj.optString("vehiclePlateNumber"),
+            loadingDate = vehicleObj.optString("loadingDate")
         )
+
 
         loadingTripMap[tripName] = trip
     }

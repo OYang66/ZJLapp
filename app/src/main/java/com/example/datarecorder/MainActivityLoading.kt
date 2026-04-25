@@ -17,6 +17,9 @@ import org.json.JSONObject
 import java.text.DecimalFormat
 import android.view.View
 import android.graphics.Typeface
+import android.widget.EditText
+import android.widget.NumberPicker
+import java.util.Locale
 
 
 
@@ -384,6 +387,8 @@ fun MainActivity.renderLoadingTable() {
         triggerAutoSave()
     }
 }
+
+
 fun MainActivity.showLoadingWeightModeMenu(
     anchor: View,
     type: ReturnLoadingType
@@ -643,19 +648,143 @@ fun MainActivity.deductAluminumBoxWeight() {
     }.show()
 }
 
-fun MainActivity.showVehicleInfoDialog() {
-    val view = layoutInflater.inflate(R.layout.dialog_vehicle_info, null, false)
+fun MainActivity.showVehiclePlateInputDialog(initialValue: String, onConfirm: (String) -> Unit) {
+    val input = EditText(this).apply {
+        setText(initialValue)
+        setSelection(text.length)
+        hint = "请输入运输车牌号"
+        isSingleLine = true
+    }
 
-    val tvGross = view.findViewById<TextView>(R.id.tvGrossWeight)
-    val tvTare = view.findViewById<TextView>(R.id.tvTareWeight)
-    val tvMidAl = view.findViewById<TextView>(R.id.tvMiddleAlWeight)
-    val tvMidIron = view.findViewById<TextView>(R.id.tvMiddleIronWeight)
-    val tvWood = view.findViewById<TextView>(R.id.tvWoodEstimate)
-    val tvNet = view.findViewById<TextView>(R.id.tvNetWeight)
-    val tvAl = view.findViewById<TextView>(R.id.tvAluminumWeight)
-    val tvIron = view.findViewById<TextView>(R.id.tvIronWeight)
+    AlertDialog.Builder(this)
+        .setTitle("运输车牌号")
+        .setView(input)
+        .setNegativeButton("取消", null)
+        .setPositiveButton("确定") { _, _ ->
+            onConfirm(input.text.toString().trim())
+        }
+        .show()
+}
+
+fun MainActivity.showLoadingDatePickerDialog(initialValue: String, onConfirm: (String) -> Unit) {
+    val now = java.util.Calendar.getInstance()
+
+    val initialYear: Int
+    val initialMonth: Int
+    val initialDay: Int
+
+    val parts = initialValue.split("-")
+    if (parts.size == 3) {
+        initialYear = parts[0].toIntOrNull() ?: now.get(java.util.Calendar.YEAR)
+        initialMonth = parts[1].toIntOrNull() ?: (now.get(java.util.Calendar.MONTH) + 1)
+        initialDay = parts[2].toIntOrNull() ?: now.get(java.util.Calendar.DAY_OF_MONTH)
+    } else {
+        initialYear = now.get(java.util.Calendar.YEAR)
+        initialMonth = now.get(java.util.Calendar.MONTH) + 1
+        initialDay = now.get(java.util.Calendar.DAY_OF_MONTH)
+    }
+
+    val container = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+        setPadding(dp(16), dp(8), dp(16), dp(8))
+    }
+
+    fun buildPicker(min: Int, max: Int, value: Int): NumberPicker {
+        return NumberPicker(this).apply {
+            minValue = min
+            maxValue = max
+            this.value = value.coerceIn(min, max)
+            descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+            wrapSelectorWheel = false
+        }
+    }
+
+    val yearPicker = buildPicker(2020, 2100, initialYear)
+    val monthPicker = buildPicker(1, 12, initialMonth)
+    val dayPicker = buildPicker(1, 31, initialDay)
+
+    container.addView(yearPicker)
+    container.addView(TextView(this).apply { text = "年"; setPadding(dp(4), 0, dp(8), 0) })
+    container.addView(monthPicker)
+    container.addView(TextView(this).apply { text = "月"; setPadding(dp(4), 0, dp(8), 0) })
+    container.addView(dayPicker)
+    container.addView(TextView(this).apply { text = "日"; setPadding(dp(4), 0, 0, 0) })
+
+    AlertDialog.Builder(this)
+        .setTitle("装车时间")
+        .setView(container)
+        .setNegativeButton("取消", null)
+        .setPositiveButton("确定") { _, _ ->
+            val date = String.format(
+                Locale.getDefault(),
+                "%04d-%02d-%02d",
+                yearPicker.value,
+                monthPicker.value,
+                dayPicker.value
+            )
+            onConfirm(date)
+        }
+        .show()
+}
+
+fun MainActivity.showVehicleInfoDialog() {
+    val container = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(18), dp(12), dp(18), dp(4))
+    }
+
+    fun buildItem(title: String): Pair<LinearLayout, TextView> {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+        }
+
+        val label = TextView(this).apply {
+            text = title
+            textSize = 15f
+            setTextColor(0xFF222222.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val value = TextView(this).apply {
+            textSize = 15f
+            setTextColor(0xFF4E3D91.toInt())
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        row.addView(label)
+        row.addView(value)
+        return row to value
+    }
+
+    val (rowPlate, tvPlate) = buildItem("运输车牌号")
+    val (rowLoadingDate, tvLoadingDate) = buildItem("装车时间")
+    val (rowGross, tvGross) = buildItem("装车毛重")
+    val (rowTare, tvTare) = buildItem("车辆皮重")
+    val (rowMidAl, tvMidAl) = buildItem("中途铝重")
+    val (rowMidIron, tvMidIron) = buildItem("中途铁重")
+    val (rowWood, tvWood) = buildItem("木方估算")
+    val (rowNet, tvNet) = buildItem("装车净重")
+    val (rowAl, tvAl) = buildItem("铝模重量")
+    val (rowIron, tvIron) = buildItem("铁件重量")
+
+    container.addView(rowPlate)
+    container.addView(rowLoadingDate)
+    container.addView(rowGross)
+    container.addView(rowTare)
+    container.addView(rowMidAl)
+    container.addView(rowMidIron)
+    container.addView(rowWood)
+    container.addView(rowNet)
+    container.addView(rowAl)
+    container.addView(rowIron)
 
     fun refresh() {
+        tvPlate.text = vehicleInfo.vehiclePlateNumber.ifBlank { "点击输入" }
+        tvLoadingDate.text = vehicleInfo.loadingDate.ifBlank { "点击选择" }
         tvGross.text = vehicleInfo.grossWeight.ifBlank { "点击输入" }
         tvTare.text = vehicleInfo.tareWeight.ifBlank { "点击输入" }
         tvMidAl.text =
@@ -682,16 +811,32 @@ fun MainActivity.showVehicleInfoDialog() {
         }.show()
     }
 
-    tvGross.setOnClickListener { input("装车毛重") { vehicleInfo.grossWeight = it } }
-    tvTare.setOnClickListener { input("车辆皮重") { vehicleInfo.tareWeight = it } }
-    tvWood.setOnClickListener { input("木方估算") { vehicleInfo.woodEstimate = it } }
+    rowPlate.setOnClickListener {
+        showVehiclePlateInputDialog(vehicleInfo.vehiclePlateNumber) {
+            vehicleInfo.vehiclePlateNumber = it
+            refresh()
+            triggerAutoSave()
+        }
+    }
 
-    tvMidAl.setOnClickListener {
+    rowLoadingDate.setOnClickListener {
+        showLoadingDatePickerDialog(vehicleInfo.loadingDate) {
+            vehicleInfo.loadingDate = it
+            refresh()
+            triggerAutoSave()
+        }
+    }
+
+    rowGross.setOnClickListener { input("装车毛重") { vehicleInfo.grossWeight = it } }
+    rowTare.setOnClickListener { input("车辆皮重") { vehicleInfo.tareWeight = it } }
+    rowWood.setOnClickListener { input("木方估算") { vehicleInfo.woodEstimate = it } }
+
+    rowMidAl.setOnClickListener {
         if (vehicleInfo.middleIronWeight.isNotBlank()) return@setOnClickListener
         input("中途铝重") { vehicleInfo.middleAluminumWeight = it }
     }
 
-    tvMidIron.setOnClickListener {
+    rowMidIron.setOnClickListener {
         if (vehicleInfo.middleAluminumWeight.isNotBlank()) return@setOnClickListener
         input("中途铁重") { vehicleInfo.middleIronWeight = it }
     }
@@ -700,10 +845,11 @@ fun MainActivity.showVehicleInfoDialog() {
 
     AlertDialog.Builder(this)
         .setTitle("过磅信息")
-        .setView(view)
+        .setView(container)
         .setPositiveButton("关闭", null)
         .show()
 }
+
 
 fun MainActivity.appendLoadingValue(value: String) {
     val row = getCurrentLoadingRow() ?: return

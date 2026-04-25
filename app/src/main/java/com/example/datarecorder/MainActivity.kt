@@ -81,6 +81,11 @@ class MainActivity : AppCompatActivity() {
     private val fastRowViewMap = linkedMapOf<Int, TableRow>()
     private var currentFastRowView: TableRow? = null
 
+    lateinit var btnBuildingMenu: Button
+
+    val buildingStandardContentMap = linkedMapOf<String, String>()
+    val buildingFastContentMap = linkedMapOf<String, String>()
+    val buildingLoadingContentMap = linkedMapOf<String, String>()
 
     lateinit var db: AppDatabase
     lateinit var repository: ProjectRepository
@@ -299,6 +304,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RetrofitClient.init(applicationContext)
 
         if (!SessionManager.isLoggedIn(this)) {
             goLogin("请先登录")
@@ -397,8 +403,10 @@ class MainActivity : AppCompatActivity() {
 
 
         btnProjectMenu = findViewById(R.id.btnProjectMenu)
+        btnBuildingMenu = findViewById(R.id.btnBuildingMenu)
         btnPackageMenu = findViewById(R.id.btnPackageMenu)
         btnMore = findViewById(R.id.btnMore)
+
         tvAvatar = findViewById(R.id.tvAvatar)
 
         btnBackspace = findViewById(R.id.btnBackspace)
@@ -456,13 +464,19 @@ class MainActivity : AppCompatActivity() {
         button.gravity = Gravity.CENTER
         button.textAlignment = View.TEXT_ALIGNMENT_CENTER
         button.includeFontPadding = false
-        button.setPadding(0, 0, 0, 0)
+        button.setPadding(8, 0, 8, 0)
         button.isAllCaps = false
+        button.maxLines = 1
+        button.ellipsize = android.text.TextUtils.TruncateAt.END
     }
 
     private fun initTopButtons() {
         btnProjectMenu.setOnClickListener {
             showProjectMenuPopup(it)
+        }
+
+        btnBuildingMenu.setOnClickListener {
+            showBuildingMenuPopup(it)
         }
 
         btnPackageMenu.setOnClickListener {
@@ -480,7 +494,6 @@ class MainActivity : AppCompatActivity() {
         btnModeToggle.setOnClickListener {
             showModeSwitchMenu(it)
         }
-
     }
 
     private fun applyMode(fast: Boolean) {
@@ -501,6 +514,7 @@ class MainActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "选择项目")
         popup.menu.add(0, 2, 1, "新建项目")
+        popup.menu.add(0, 3, 2, "查看服务器项目")
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -512,11 +526,18 @@ class MainActivity : AppCompatActivity() {
                     showCreateProjectDialog()
                     true
                 }
+                3 -> {
+                    loadServerProjectList()
+                    true
+                }
                 else -> false
             }
         }
         popup.show()
     }
+
+
+
     private fun getTodayPackageDate(): String {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
@@ -536,10 +557,13 @@ class MainActivity : AppCompatActivity() {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "导出")
         popup.menu.add(0, 2, 1, "分享")
-        popup.menu.add(0, 3, 2, "检查更新")
-        popup.menu.add(0, 4, 3, "二维码识别")
-        popup.menu.add(0, 5, 4, "NFC碰一碰")
-        popup.menu.add(0, 6, 5, "历史数据")
+        popup.menu.add(0, 3, 2, "一键导出返厂汇总表")
+        popup.menu.add(0, 4, 3, "检查更新")
+        popup.menu.add(0, 5, 4, "二维码识别")
+        popup.menu.add(0, 6, 5, "NFC碰一碰")
+        popup.menu.add(0, 7, 6, "历史数据")
+        popup.menu.add(0, 8, 7, "上传当前文件到服务器")
+        popup.menu.add(0, 9, 8, "查看服务器统计")
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -551,46 +575,67 @@ class MainActivity : AppCompatActivity() {
                     shareCurrentModeProject()
                     true
                 }
-
                 3 -> {
-                    appUpdateManager.checkUpdate()
+                    shareLoadingSummaryProject()
                     true
                 }
                 4 -> {
+                    appUpdateManager.checkUpdate()
+                    true
+                }
+                5 -> {
                     showFeatureComingSoonDialog(
                         title = "二维码识别",
                         message = "你发现了一个新功能，这个功能通过摄像头连续扫描模板二维码，即可连续统计模板的安装编号及型号。但目前资金不足，人员不够，代码未写，敬请期待"
                     )
                     true
                 }
-                5 -> {
+                6 -> {
                     showFeatureComingSoonDialog(
                         title = "NFC碰一碰",
                         message = "你发现了一个更加强大的功能，这个功能通过手机靠近模板编码位置，即可自动统计模板的安装编号及型号。但目前资金不足，人员不够，代码未写，敬请期待"
                     )
                     true
                 }
-                6 -> {
+                7 -> {
                     showHistoryBackupDialog()
+                    true
+                }
+                8 -> {
+                    uploadCurrentModeProjectToServer()
+                    true
+                }
+                9 -> {
+                    loadServerStatSummary()
                     true
                 }
                 else -> false
             }
         }
+
         popup.show()
     }
+
+
+
 
     private fun showAccountPopup(anchor: View) {
         val username = SessionManager.getUsername(this).ifBlank { "未登录账号" }
 
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "账号：$username")
-        popup.menu.add(0, 2, 1, "退出登录")
+        popup.menu.add(0, 2, 1, "访问后台")
+        popup.menu.add(0, 3, 2, "退出登录")
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> true
                 2 -> {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
+                    startActivity(intent)
+                    true
+                }
+                3 -> {
                     SessionManager.clearLogin(this)
                     AccountStatusScheduler.stop(this)
                     startActivity(Intent(this, LoginActivity::class.java))
@@ -603,6 +648,7 @@ class MainActivity : AppCompatActivity() {
         popup.show()
     }
 
+
     private fun updateAvatarView() {
         val username = SessionManager.getUsername(this).trim()
         val avatarText = when {
@@ -612,9 +658,7 @@ class MainActivity : AppCompatActivity() {
         tvAvatar.text = avatarText
     }
 
-    private fun updatePackageButtonText() {
-        btnPackageMenu.text = if (currentPackageName.isBlank()) "包号" else currentPackageName
-    }
+
 
     private fun ensurePackageSelected(): Boolean {
         if (currentProjectId <= 0L) {
@@ -628,15 +672,7 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private fun clearAllPackageMaps() {
-        packageStandardRowsMap.clear()
-        packageCurrentStandardRowMap.clear()
-        packageFastRowsMap.clear()
-        packageCurrentFastRowMap.clear()
-        packageDateMap.clear()
-        currentPackageName = ""
-        updatePackageButtonText()
-    }
+
 
 
 
@@ -681,29 +717,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun resetForNewProjectWithoutPackage() {
-        clearAllPackageMaps()
 
-        clearStandardEditingState()
-        clearFastEditingState()
-        pendingReplaceStandardEditing = false
-        pendingReplaceFastEditing = false
-        pendingReplaceCurrentFastModel = false
-        pendingReplaceCurrentStandardModel = false
-
-        savedStandardRows.clear()
-        currentStandardRow = StandardRow()
-        currentStandardField = StandardField.INSTALL_NO
-        lastStandardField = StandardField.INSTALL_NO
-
-        savedFastRows.clear()
-        currentFastRow = FastRow()
-        currentFastNumericField = FastField.WIDTH
-        currentFastActiveField = FastField.WIDTH
-        lastFastField = FastField.WIDTH
-
-        updateDisplayTable()
-    }
 
     // =========================
     // 标准模式
@@ -853,31 +867,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initStandardGroupArea() {
-        bindThreeColumnButtons(layoutWall, wallKeys)
-        bindThreeColumnButtons(layoutBeam, beamKeys)
-        bindThreeColumnButtons(layoutSlab, slabKeys)
-        bindThreeColumnButtons(layoutStair, stairKeys)
-    }
+        val textSize = getStandardGroupButtonTextSize()
 
-    private fun bindThreeColumnButtons(grid: GridLayout, keys: List<String>) {
-        grid.removeAllViews()
-        grid.columnCount = 3
-        grid.rowCount = ((keys.size + 2) / 3)
-
-        keys.forEachIndexed { index, key ->
-            grid.addView(
-                createWeightedButton(
-                    text = key,
-                    row = index / 3,
-                    column = index % 3,
-                    height = dp(24),
-                    textSizeSp = 8f
-                ) {
-                    handleStandardTokenInput(key)
-                }
-            )
+        bindAdaptiveFixedColumnButtons(layoutWall, wallKeys, 4, textSize) { value ->
+            handleStandardTokenInput(value)
+        }
+        bindAdaptiveFixedColumnButtons(layoutBeam, beamKeys, 4, textSize) { value ->
+            handleStandardTokenInput(value)
+        }
+        bindAdaptiveFixedColumnButtons(layoutSlab, slabKeys, 4, textSize) { value ->
+            handleStandardTokenInput(value)
+        }
+        bindAdaptiveFixedColumnButtons(layoutStair, stairKeys, 4, textSize) { value ->
+            handleStandardTokenInput(value)
         }
     }
+
+
+
 
 
 
@@ -2853,7 +2860,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private suspend fun saveCurrentProjectContentNow() {
+    suspend fun MainActivity.saveCurrentProjectContentNow() {
         if (currentProjectId <= 0L) return
 
         saveCurrentPackageToMemoryForSave()
@@ -2863,11 +2870,13 @@ class MainActivity : AppCompatActivity() {
             id = currentProjectId,
             name = currentProjectName,
             buildingName = currentBuildingName,
-            standardContent = serializeStandardContent(),
-            fastContent = serializeFastContent(),
-            loadingContent = serializeLoadingContent()
+            standardContent = serializeProjectStandardBuildingsContent(),
+            fastContent = serializeProjectFastBuildingsContent(),
+            loadingContent = serializeProjectLoadingBuildingsContent()
         )
     }
+
+
 
 
 
@@ -2915,33 +2924,52 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    fun rebuildPackageMapsFromProject(project: ProjectEntity) {
-        clearAllPackageMaps()
+    fun MainActivity.rebuildPackageMapsFromProject(project: ProjectEntity) {
+        buildingStandardContentMap.clear()
+        buildingFastContentMap.clear()
+        buildingLoadingContentMap.clear()
 
-        deserializePackageStandardContent(project.standardContent)
-        deserializePackageFastContent(project.fastContent)
+        val defaultBuilding = if (project.buildingName.isBlank()) "1号楼" else project.buildingName
 
-        val allNames = linkedSetOf<String>()
-        allNames.addAll(packageStandardRowsMap.keys)
-        allNames.addAll(packageFastRowsMap.keys)
+        val (standardCurrentBuilding, standardMap) =
+            parseBuildingScopedContent(project.standardContent, defaultBuilding)
+        val (fastCurrentBuilding, fastMap) =
+            parseBuildingScopedContent(project.fastContent, defaultBuilding)
+        val (loadingCurrentBuilding, loadingMap) =
+            parseBuildingScopedContent(project.loadingContent, defaultBuilding)
 
-        allNames.forEach { name ->
-            packageStandardRowsMap.putIfAbsent(name, mutableListOf())
-            packageCurrentStandardRowMap.putIfAbsent(name, StandardRow())
-            packageFastRowsMap.putIfAbsent(name, mutableListOf())
-            packageCurrentFastRowMap.putIfAbsent(name, FastRow())
+        buildingStandardContentMap.putAll(standardMap)
+        buildingFastContentMap.putAll(fastMap)
+        buildingLoadingContentMap.putAll(loadingMap)
+
+        val allBuildings = linkedSetOf<String>()
+        allBuildings.add(defaultBuilding)
+        allBuildings.addAll(buildingStandardContentMap.keys)
+        allBuildings.addAll(buildingFastContentMap.keys)
+        allBuildings.addAll(buildingLoadingContentMap.keys)
+
+        currentBuildingName = listOf(
+            project.buildingName,
+            standardCurrentBuilding,
+            fastCurrentBuilding,
+            loadingCurrentBuilding
+        ).firstOrNull { it.isNotBlank() && allBuildings.contains(it) } ?: defaultBuilding
+
+        allBuildings.forEach {
+            buildingStandardContentMap.putIfAbsent(it, "")
+            buildingFastContentMap.putIfAbsent(it, "")
+            buildingLoadingContentMap.putIfAbsent(it, "")
         }
 
-        if (currentPackageName.isBlank() && allNames.isNotEmpty()) {
-            currentPackageName = allNames.first()
-        }
-
-        if (currentPackageName.isBlank()) {
-            resetForNewProjectWithoutPackage()
-        } else {
-            loadPackageToScreen(currentPackageName)
-        }
+        // 切换项目时，绝对不能先保存当前屏幕旧数据到新项目
+        loadBuildingScopeToScreen(currentBuildingName, saveCurrentFirst = false)
     }
+
+
+    fun MainActivity.dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+
 
     // =========================
 // 项目
@@ -2955,135 +2983,29 @@ class MainActivity : AppCompatActivity() {
         val target = allProjects.firstOrNull { it.id == lastProjectId } ?: allProjects.firstOrNull()
 
         if (target != null) {
-            switchProject(target)
+            switchProjectById(target.id)
             return
         }
 
         val newId = withContext(Dispatchers.IO) {
-            repository.createProject("默认项目", "")
+            repository.createProject("默认项目", "1#")
         }
 
-        val newProject = withContext(Dispatchers.IO) {
-            repository.getProjectById(newId)
-        }
-
-        if (newProject != null) {
-            switchProject(newProject)
-        }
+        switchProjectById(newId)
     }
 
 
 
-    private fun showCreateProjectDialog() {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val padding = (20 * resources.displayMetrics.density).toInt()
-            setPadding(padding, padding, padding, 0)
-        }
-
-        val inputProjectName = EditText(this).apply {
-            hint = "请输入项目名称"
-            isSingleLine = true
-        }
-
-        val inputBuildingName = EditText(this).apply {
-            hint = "请输入楼栋号，如：1号楼"
-            isSingleLine = true
-        }
-
-        container.addView(
-            inputProjectName,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        val topMargin = (12 * resources.displayMetrics.density).toInt()
-        container.addView(
-            inputBuildingName,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                this.topMargin = topMargin
-            }
-        )
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("新建项目")
-            .setView(container)
-            .setPositiveButton("确定", null)
-            .setNegativeButton("取消", null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val name = inputProjectName.text.toString().trim()
-                val buildingName = inputBuildingName.text.toString().trim()
-
-                if (name.isEmpty()) {
-                    toast("项目名称不能为空")
-                    return@setOnClickListener
-                }
-
-                if (buildingName.isEmpty()) {
-                    toast("楼栋号不能为空")
-                    return@setOnClickListener
-                }
-
-                lifecycleScope.launch {
-                    val exists = withContext(Dispatchers.IO) {
-                        repository.getAllProjects().any { it.name == name && it.buildingName == buildingName }
-                    }
-
-                    if (exists) {
-                        toast("项目已存在")
-                    } else {
-                        hideKeyboard(inputBuildingName)
-                        dialog.dismiss()
-                        createProjectInternal(name, buildingName)
-                    }
-                }
-            }
-
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
-                hideKeyboard(inputBuildingName)
-                dialog.dismiss()
-            }
-
-            inputProjectName.requestFocus()
-        }
-
-        dialog.setOnDismissListener {
-            hideKeyboard(inputBuildingName)
-            refreshMainLayoutAfterKeyboard()
-        }
-
-        dialog.show()
-    }
-
-
-
-    private suspend fun createProjectInternal(name: String, buildingName: String) {
-        val newId = withContext(Dispatchers.IO) {
-            repository.createProject(name, buildingName)
-        }
-
-        val project = withContext(Dispatchers.IO) {
-            repository.getAllProjects().firstOrNull { it.id == newId }
-        }
-
-        if (project != null) {
-            switchProject(project)
-            currentBuildingName = buildingName
-            resetForNewProjectWithoutPackage()
-            saveCurrentProjectContent()
-            toast("已创建项目：$name")
+    fun MainActivity.getStandardGroupButtonTextSize(): Float {
+        val widthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        return when {
+            widthDp <= 360f -> 9.5f
+            widthDp <= 400f -> 10.5f
+            widthDp <= 480f -> 11f
+            else -> 12f
         }
     }
+
 
 
 
@@ -3119,7 +3041,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val nameView = TextView(this@MainActivity).apply {
-                    text = "${project.name}（${project.buildingName}）"
+                    text = project.name
+
                     textSize = 16f
                     setTextColor(0xFF222222.toInt())
                     layoutParams = LinearLayout.LayoutParams(
@@ -3129,8 +3052,10 @@ class MainActivity : AppCompatActivity() {
                     )
                     setPadding(dp(4), dp(8), dp(4), dp(8))
                     setOnClickListener {
-                        switchProject(project)
-                        dialog.dismiss()
+                        lifecycleScope.launch {
+                            switchProjectById(project.id)
+                            dialog.dismiss()
+                        }
                     }
                 }
 
@@ -3154,6 +3079,7 @@ class MainActivity : AppCompatActivity() {
             dialog.show()
         }
     }
+
 
 
     private fun confirmDeleteProject(project: ProjectEntity, parentDialog: AlertDialog) {
@@ -3201,14 +3127,14 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun hideKeyboard(view: View? = currentFocus) {
+    fun hideKeyboard(view: View? = currentFocus) {
         val targetView = view ?: window.decorView
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(targetView.windowToken, 0)
         targetView.clearFocus()
     }
 
-    private fun refreshMainLayoutAfterKeyboard() {
+    fun refreshMainLayoutAfterKeyboard() {
         window.decorView.post {
             standardModeContainer.requestLayout()
             fastModeContainer.requestLayout()

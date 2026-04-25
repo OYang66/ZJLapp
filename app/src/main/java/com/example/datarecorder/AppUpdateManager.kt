@@ -122,18 +122,29 @@ class AppUpdateManager(private val activity: Activity) {
                 }
             )
             .setMessage(message)
-            .setCancelable(!info.forceUpdate)
+            .setCancelable(info.forceUpdate != 1)
             .setPositiveButton("立即更新") { _, _ ->
                 downloadAndInstall(info.downloadUrl)
             }
             .apply {
-                if (!info.forceUpdate) {
+                if (info.forceUpdate != 1) {
                     setNegativeButton("暂不更新", null)
                 }
+
             }
             .create()
 
         dialog.show()
+    }
+    private fun normalizeDownloadUrl(rawUrl: String): String {
+        if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+            return rawUrl
+        }
+
+        val cleanPath = if (rawUrl.startsWith("/")) rawUrl else "/$rawUrl"
+
+        // 通过 nginx 代理访问若依后端文件
+        return "http://175.178.12.210:82/prod-api$cleanPath"
     }
 
     private fun downloadAndInstall(downloadUrl: String) {
@@ -146,8 +157,10 @@ class AppUpdateManager(private val activity: Activity) {
             try {
                 showDownloadProgressDialog()
 
+                val realUrl = normalizeDownloadUrl(downloadUrl)
+
                 val apkFile = withContext(Dispatchers.IO) {
-                    downloadApk(downloadUrl)
+                    downloadApk(realUrl)
                 }
 
                 dismissDownloadDialog()
@@ -167,6 +180,7 @@ class AppUpdateManager(private val activity: Activity) {
             }
         }
     }
+
 
     private fun downloadApk(url: String): File? {
         val request = Request.Builder().url(url).build()

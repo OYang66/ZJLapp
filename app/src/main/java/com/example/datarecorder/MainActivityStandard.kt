@@ -241,30 +241,53 @@ fun MainActivity.deleteLastStandardInput() {
 fun MainActivity.serializeStandardContent(): String {
     saveScreenDataToCurrentPackage()
 
-    if (packageStandardRowsMap.isEmpty()) return ""
+    val allPackageNames = linkedSetOf<String>()
+    allPackageNames.addAll(packageStandardRowsMap.keys)
+    allPackageNames.addAll(packageCurrentStandardRowMap.keys)
+
+    if (currentPackageName.isNotBlank()) {
+        allPackageNames.add(currentPackageName)
+    }
+
+    if (allPackageNames.isEmpty()) return ""
 
     val builder = StringBuilder()
     builder.append("#CURRENT_PACKAGE=").append(currentPackageName).append("\n")
 
-    packageStandardRowsMap.forEach { (packageName, rows) ->
+    allPackageNames.forEach { packageName ->
+        val rows = packageStandardRowsMap[packageName] ?: mutableListOf()
+        val current = packageCurrentStandardRowMap[packageName] ?: StandardRow()
+
+        val hasSavedRows = rows.isNotEmpty()
+        val hasCurrentRow = !current.isEmpty()
+
+        if (!hasSavedRows && !hasCurrentRow) {
+            return@forEach
+        }
+
         builder.append("#PACKAGE=").append(packageName).append("\n")
+
+        val packageDate = packageDateMap[packageName].orEmpty()
+        builder.append("#PACKAGE_DATE=").append(packageDate).append("\n")
+
         builder.append("#ROWS").append("\n")
         rows.forEach {
             builder.append(
                 listOf(it.installNo, it.model, it.quantity).joinToString("\t")
             ).append("\n")
         }
+
         builder.append("#CURRENT_ROW").append("\n")
-        val current = packageCurrentStandardRowMap[packageName] ?: StandardRow()
         builder.append(
             listOf(current.installNo, current.model, current.quantity).joinToString("\t")
         ).append("\n")
+
         builder.append("#END_PACKAGE").append("\n")
     }
 
     return builder.toString()
 }
- fun MainActivity.deserializePackageStandardContent(content: String) {
+fun MainActivity.deserializePackageStandardContent(content: String) {
     packageStandardRowsMap.clear()
     packageCurrentStandardRowMap.clear()
 
@@ -276,6 +299,7 @@ fun MainActivity.serializeStandardContent(): String {
             val defaultPackage = "第1包"
             packageStandardRowsMap[defaultPackage] = oldRows.toMutableList()
             packageCurrentStandardRowMap[defaultPackage] = StandardRow()
+            packageDateMap[defaultPackage] = getTodayPackageDate()
             currentPackageName = defaultPackage
         }
         return
@@ -283,6 +307,7 @@ fun MainActivity.serializeStandardContent(): String {
 
     val lines = content.replace("\r\n", "\n").split("\n")
     var packageName = ""
+    var packageDate = ""
     var inRows = false
     var inCurrentRow = false
     var rows = mutableListOf<StandardRow>()
@@ -294,10 +319,21 @@ fun MainActivity.serializeStandardContent(): String {
             }
 
             line.startsWith("#PACKAGE=") -> {
+                if (packageName.isNotBlank()) {
+                    packageStandardRowsMap[packageName] = rows
+                    packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+                    packageDateMap[packageName] = if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+                }
+
                 packageName = line.removePrefix("#PACKAGE=").trim()
+                packageDate = ""
                 rows = mutableListOf()
                 inRows = false
                 inCurrentRow = false
+            }
+
+            line.startsWith("#PACKAGE_DATE=") -> {
+                packageDate = line.removePrefix("#PACKAGE_DATE=").trim()
             }
 
             line == "#ROWS" -> {
@@ -314,8 +350,10 @@ fun MainActivity.serializeStandardContent(): String {
                 if (packageName.isNotBlank()) {
                     packageStandardRowsMap[packageName] = rows
                     packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+                    packageDateMap[packageName] = if (packageDate.isBlank()) getTodayPackageDate() else packageDate
                 }
                 packageName = ""
+                packageDate = ""
                 inRows = false
                 inCurrentRow = false
             }
@@ -342,9 +380,20 @@ fun MainActivity.serializeStandardContent(): String {
             }
         }
     }
+
+    if (packageName.isNotBlank()) {
+        packageStandardRowsMap[packageName] = rows
+        packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+        packageDateMap[packageName] = if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+    }
+
+    if (currentPackageName.isBlank()) {
+        currentPackageName = packageStandardRowsMap.keys.firstOrNull().orEmpty()
+    }
 }
 
- fun deserializeStandardContentOld(content: String): List<StandardRow> {
+
+fun deserializeStandardContentOld(content: String): List<StandardRow> {
     if (content.isBlank()) return emptyList()
 
     return content.replace("\r\n", "\n")
