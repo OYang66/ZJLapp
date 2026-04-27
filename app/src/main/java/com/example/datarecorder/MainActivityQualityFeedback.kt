@@ -1,19 +1,18 @@
 package com.example.datarecorder
 
+import android.net.Uri
 import android.view.Gravity
 import android.view.View
-import android.widget.TableRow
-import androidx.appcompat.app.AlertDialog
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.Button
-import android.net.Uri
+import android.widget.TableRow
+import androidx.appcompat.app.AlertDialog
 import java.io.File
-import androidx.core.content.FileProvider
 
-
-
-
+// =========================
+// 质量反馈
+// =========================
 fun MainActivity.renderQualityFeedbackTable() {
     tableHeader.removeAllViews()
     tableBody.removeAllViews()
@@ -400,7 +399,7 @@ private fun MainActivity.applyQualityTypeSelection(
     triggerAutoSave()
 }
 
-private fun MainActivity.buildQualityFeedbackDesc(
+private fun buildQualityFeedbackDesc(
     materialType: String,
     qualityType: String
 ): String {
@@ -418,9 +417,16 @@ private fun MainActivity.buildQualityFeedbackDesc(
 }
 
 fun MainActivity.initQualityInputButtons() {
+
     findViewById<Button>(R.id.btnQualityPlus).setOnClickListener {
-        appendQualityText("+")
+        showSymbolPopup(it) { symbol ->
+            appendQualityText(symbol)
+        }
     }
+
+
+
+
 
     findViewById<Button>(R.id.btnQualityMultiply).setOnClickListener {
         appendQualityText("L")

@@ -2,8 +2,14 @@ package com.example.datarecorder
 
 import java.util.Locale
 import android.view.View
+import android.widget.TableRow
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 
 
+// =========================
+// 返厂统计
+// =========================
 fun MainActivity.initFastModeArea() {
     val presetTextSize = getFastPresetButtonTextSize()
     val customTextSize = getFastCustomButtonTextSize()
@@ -575,4 +581,536 @@ fun MainActivity.deserializePackageFastContent(content: String) {
  fun MainActivity.areaToSquareMeterText(area: Double): String {
     return dfArea.format(area / 1_000_000.0)
 }
+
+fun MainActivity.renderFastTable() {
+    clearFastCellRefs()
+
+    addTableHeader("序号", "宽度", "型号", "长度", "数量")
+
+    if (savedFastRows.isEmpty() && currentFastRow.isEmpty()) {
+        addFastDataRow(
+            displayIndex = 1,
+            data = FastRow(),
+            isCurrentRow = true,
+            savedRowIndex = null
+        )
+        return
+    }
+
+    savedFastRows.forEachIndexed { index, row ->
+        addFastDataRow(
+            displayIndex = index + 1,
+            data = row,
+            isCurrentRow = false,
+            savedRowIndex = index
+        )
+    }
+
+    addFastDataRow(
+        displayIndex = savedFastRows.size + 1,
+        data = currentFastRow.copy(),
+        isCurrentRow = true,
+        savedRowIndex = null
+    )
+}
+fun MainActivity.clearFastCellRefs() {
+    fastWidthCellMap.clear()
+    fastModelCellMap.clear()
+    fastLengthCellMap.clear()
+    fastQuantityCellMap.clear()
+    currentFastWidthCell = null
+    currentFastModelCell = null
+    currentFastLengthCell = null
+    currentFastQuantityCell = null
+    fastRowViewMap.clear()
+    currentFastRowView = null
+}
+
+fun MainActivity.buildFastDataRowView(
+    displayIndex: Int,
+    data: FastRow,
+    isCurrentRow: Boolean,
+    savedRowIndex: Int? = null
+): TableRow {
+    val row = TableRow(this)
+
+    row.addView(
+        createTableCell(
+            text = displayIndex.toString(),
+            isHeader = false,
+            highlight = isCurrentRow,
+            onLongClick = {
+                showFastRowDeleteOptions(savedRowIndex, isCurrentRow)
+                true
+            }
+        )
+    )
+
+    val widthCell = createTableCell(
+        text = data.width,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingFastRowIndex == savedRowIndex && editingFastField == FastField.WIDTH
+        } else {
+            editingFastRowIndex == null && currentFastActiveField == FastField.WIDTH
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectFastSavedCell(savedRowIndex, FastField.WIDTH)
+            } else {
+                val oldField = currentFastActiveField
+                clearFastEditingState()
+                pendingReplaceFastEditing = false
+                currentFastNumericField = FastField.WIDTH
+                currentFastActiveField = FastField.WIDTH
+                lastFastField = FastField.WIDTH
+                if (oldField != currentFastActiveField) {
+                    refreshFastSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(widthCell)
+
+    val modelCell = createTableCell(
+        text = data.model,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingFastRowIndex == savedRowIndex && editingFastField == FastField.MODEL
+        } else {
+            editingFastRowIndex == null && currentFastActiveField == FastField.MODEL
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectFastSavedCell(savedRowIndex, FastField.MODEL)
+            } else {
+                val oldField = currentFastActiveField
+                clearFastEditingState()
+                pendingReplaceFastEditing = false
+                currentFastActiveField = FastField.MODEL
+                lastFastField = FastField.MODEL
+                if (oldField != currentFastActiveField) {
+                    refreshFastSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(modelCell)
+
+    val lengthCell = createTableCell(
+        text = data.length,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingFastRowIndex == savedRowIndex && editingFastField == FastField.LENGTH
+        } else {
+            editingFastRowIndex == null && currentFastActiveField == FastField.LENGTH
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectFastSavedCell(savedRowIndex, FastField.LENGTH)
+            } else {
+                val oldField = currentFastActiveField
+                clearFastEditingState()
+                pendingReplaceFastEditing = false
+                currentFastNumericField = FastField.LENGTH
+                currentFastActiveField = FastField.LENGTH
+                lastFastField = FastField.LENGTH
+                if (oldField != currentFastActiveField) {
+                    refreshFastSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(lengthCell)
+
+    val quantityCell = createTableCell(
+        text = data.quantity,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingFastRowIndex == savedRowIndex && editingFastField == FastField.QUANTITY
+        } else {
+            editingFastRowIndex == null && currentFastActiveField == FastField.QUANTITY
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectFastSavedCell(savedRowIndex, FastField.QUANTITY)
+            } else {
+                val oldField = currentFastActiveField
+                clearFastEditingState()
+                pendingReplaceFastEditing = false
+                currentFastNumericField = FastField.QUANTITY
+                currentFastActiveField = FastField.QUANTITY
+                lastFastField = FastField.QUANTITY
+                if (oldField != currentFastActiveField) {
+                    refreshFastSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(quantityCell)
+
+    if (savedRowIndex != null) {
+        fastWidthCellMap[savedRowIndex] = widthCell
+        fastModelCellMap[savedRowIndex] = modelCell
+        fastLengthCellMap[savedRowIndex] = lengthCell
+        fastQuantityCellMap[savedRowIndex] = quantityCell
+        fastRowViewMap[savedRowIndex] = row
+    } else {
+        currentFastWidthCell = widthCell
+        currentFastModelCell = modelCell
+        currentFastLengthCell = lengthCell
+        currentFastQuantityCell = quantityCell
+        currentFastRowView = row
+    }
+
+    return row
+}
+
+fun MainActivity.addFastDataRow(
+    displayIndex: Int,
+    data: FastRow,
+    isCurrentRow: Boolean,
+    savedRowIndex: Int? = null
+) {
+    tableBody.addView(
+        buildFastDataRowView(
+            displayIndex = displayIndex,
+            data = data,
+            isCurrentRow = isCurrentRow,
+            savedRowIndex = savedRowIndex
+        )
+    )
+}
+
+
+fun MainActivity.refreshFastVisibleCellsOnly() {
+    if (currentModeType != ModeType.FAST) return
+
+    if (editingFastRowIndex != null) {
+        val rowIndex = editingFastRowIndex ?: return
+        val row = savedFastRows.getOrNull(rowIndex) ?: return
+        fastWidthCellMap[rowIndex]?.text = row.width
+        fastModelCellMap[rowIndex]?.text = row.model
+        fastLengthCellMap[rowIndex]?.text = row.length
+        fastQuantityCellMap[rowIndex]?.text = row.quantity
+    } else {
+        currentFastWidthCell?.text = currentFastRow.width
+        currentFastModelCell?.text = currentFastRow.model
+        currentFastLengthCell?.text = currentFastRow.length
+        currentFastQuantityCell?.text = currentFastRow.quantity
+    }
+
+    tvSummaryPrimary.visibility = View.VISIBLE
+    tvSummarySecondary.visibility = View.VISIBLE
+    tvSummaryPrimary.text = "合计面积：${formatAreaSquareMeter(calculateFastTotalArea())}"
+    tvSummarySecondary.text = "合计数量：${calculateFastTotalQty()}"
+}
+
+
+fun MainActivity.refreshFastSelectionOnly(
+    oldSavedRowIndex: Int?,
+    oldWasCurrentRow: Boolean,
+    newSavedRowIndex: Int?,
+    newWasCurrentRow: Boolean
+) {
+    if (currentModeType != ModeType.FAST) return
+    rebuildFastRowOnly(oldSavedRowIndex, oldWasCurrentRow)
+    if (oldSavedRowIndex != newSavedRowIndex || oldWasCurrentRow != newWasCurrentRow) {
+        rebuildFastRowOnly(newSavedRowIndex, newWasCurrentRow)
+    }
+}
+
+
+fun MainActivity.rebuildFastRowOnly(savedRowIndex: Int?, isCurrentRow: Boolean) {
+    if (currentModeType != ModeType.FAST) return
+
+    val displayIndex = if (savedRowIndex != null) savedRowIndex + 1 else savedFastRows.size + 1
+    val data = if (savedRowIndex != null) {
+        savedFastRows.getOrNull(savedRowIndex)?.copy() ?: return
+    } else {
+        currentFastRow.copy()
+    }
+
+    val newRow = buildFastDataRowView(
+        displayIndex = displayIndex,
+        data = data,
+        isCurrentRow = isCurrentRow,
+        savedRowIndex = savedRowIndex
+    )
+
+    val targetIndex = if (savedRowIndex != null) savedRowIndex else tableBody.childCount - 1
+    if (targetIndex < 0 || targetIndex >= tableBody.childCount) return
+
+    tableBody.removeViewAt(targetIndex)
+    tableBody.addView(newRow, targetIndex)
+}
+
+
+fun MainActivity.appendTextToEditingFastCell(text: String): Boolean {
+    val rowIndex = editingFastRowIndex ?: return false
+    val field = editingFastField ?: return false
+    val row = savedFastRows.getOrNull(rowIndex) ?: return false
+
+    when (field) {
+        FastField.WIDTH -> {
+            val newValue = if (pendingReplaceFastEditing) text else row.width + text
+            if (!isFastWidthValid(newValue)) {
+                if (text in fastPresetNumericTokens) {
+                    showFastInputWarning()
+                    row.width = text
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.WIDTH
+                    currentFastActiveField = FastField.WIDTH
+                    lastFastField = FastField.WIDTH
+                    updateDisplayTable()
+                    triggerAutoSave()
+                    return true
+                }
+                showFastInputWarning()
+                return true
+            }
+            row.width = newValue
+            currentFastNumericField = FastField.WIDTH
+        }
+
+        FastField.MODEL -> {
+            row.model = text
+        }
+
+        FastField.LENGTH -> {
+            val newValue = if (pendingReplaceFastEditing) text else row.length + text
+            if (!isFastLengthValid(newValue)) {
+                if (text in fastPresetNumericTokens) {
+                    showFastInputWarning()
+                    row.length = text
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.LENGTH
+                    currentFastActiveField = FastField.LENGTH
+                    lastFastField = FastField.LENGTH
+                    updateDisplayTable()
+                    triggerAutoSave()
+                    return true
+                }
+                showFastInputWarning()
+                return true
+            }
+            row.length = newValue
+            currentFastNumericField = FastField.LENGTH
+        }
+
+        FastField.QUANTITY -> {
+            if (text == "." || !text.all { it.isDigit() }) {
+                if (containsLetters(text)) {
+                    toast("数量内不能输入字母")
+                }
+                return true
+            }
+            val newValue = if (pendingReplaceFastEditing) text else row.quantity + text
+            if (!isFastQuantityValid(newValue)) {
+                if (text in fastPresetNumericTokens) {
+                    showFastInputWarning()
+                    row.quantity = text
+                    pendingReplaceFastEditing = false
+                    currentFastNumericField = FastField.QUANTITY
+                    currentFastActiveField = FastField.QUANTITY
+                    lastFastField = FastField.QUANTITY
+                    updateDisplayTable()
+                    triggerAutoSave()
+                    return true
+                }
+                showFastInputWarning()
+                return true
+            }
+            row.quantity = newValue
+            currentFastNumericField = FastField.QUANTITY
+        }
+    }
+
+    pendingReplaceFastEditing = false
+    currentFastActiveField = field
+    lastFastField = field
+    refreshFastVisibleCellsOnly()
+    triggerAutoSave()
+    return true
+
+}
+
+
+fun MainActivity.deleteFromEditingFastCell(): Boolean {
+    val rowIndex = editingFastRowIndex ?: return false
+    val field = editingFastField ?: return false
+    val row = savedFastRows.getOrNull(rowIndex) ?: return false
+
+    fun cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
+
+    when (field) {
+        FastField.WIDTH -> {
+            row.width = cutLast(row.width)
+            currentFastNumericField = FastField.WIDTH
+        }
+        FastField.MODEL -> {
+            row.model = cutLast(row.model)
+        }
+        FastField.LENGTH -> {
+            row.length = cutLast(row.length)
+            currentFastNumericField = FastField.LENGTH
+        }
+        FastField.QUANTITY -> {
+            row.quantity = cutLast(row.quantity)
+            currentFastNumericField = FastField.QUANTITY
+        }
+    }
+
+    pendingReplaceFastEditing = false
+    currentFastActiveField = field
+    lastFastField = field
+    refreshFastVisibleCellsOnly()
+    triggerAutoSave()
+    return true
+
+}
+
+fun MainActivity.selectFastSavedCell(rowIndex: Int, field: FastField) {
+    if (rowIndex !in savedFastRows.indices) return
+    editingFastRowIndex = rowIndex
+    editingFastField = field
+    currentFastActiveField = field
+    currentFastNumericField = when (field) {
+        FastField.WIDTH -> FastField.WIDTH
+        FastField.MODEL -> FastField.WIDTH
+        FastField.LENGTH -> FastField.LENGTH
+        FastField.QUANTITY -> FastField.QUANTITY
+    }
+    lastFastField = field
+    pendingReplaceFastEditing = true
+    updateDisplayTable()
+}
+
+
+fun MainActivity.showFastRowDeleteOptions(savedRowIndex: Int?, isCurrentRow: Boolean) {
+    if (savedRowIndex == null && (!isCurrentRow || currentFastRow.isEmpty())) return
+
+    val options = arrayOf("删除该行")
+
+    AlertDialog.Builder(this)
+        .setTitle("操作")
+        .setItems(options) { _, which ->
+            if (which == 0) {
+                confirmDeleteFastRow(savedRowIndex, isCurrentRow)
+            }
+        }
+        .setNegativeButton("取消", null)
+        .show()
+}
+
+
+fun guessLastFastField(row: FastRow): FastField {
+    return when {
+        row.quantity.isNotEmpty() -> FastField.QUANTITY
+        row.length.isNotEmpty() -> FastField.LENGTH
+        row.model.isNotEmpty() -> FastField.MODEL
+        row.width.isNotEmpty() -> FastField.WIDTH
+        else -> FastField.WIDTH
+    }
+}
+
+
+fun MainActivity.hasFastEditingTarget(): Boolean {
+    return editingFastRowIndex != null && editingFastField != null
+}
+
+
+fun MainActivity.clearFastEditingState() {
+    editingFastRowIndex = null
+    editingFastField = null
+    pendingReplaceFastEditing = false
+}
+
+
+fun MainActivity.resolveNextFastNumericFieldAfterModel(row: FastRow): FastField {
+    return when (row.model.trim().uppercase(Locale.getDefault())) {
+        "SP" -> FastField.QUANTITY
+        "E", "F" -> FastField.LENGTH
+        else -> {
+            when {
+                row.width.isBlank() -> FastField.WIDTH
+                row.length.isBlank() -> FastField.LENGTH
+                else -> FastField.QUANTITY
+            }
+        }
+    }
+}
+
+
+fun MainActivity.isFastWidthValid(value: String): Boolean {
+    if (value.isBlank() || value == ".") return true
+    val number = value.toDoubleOrNull() ?: return true
+    return number <= 600.0
+}
+
+fun MainActivity.isFastLengthValid(value: String): Boolean {
+    if (value.isBlank() || value == ".") return true
+    val number = value.toDoubleOrNull() ?: return true
+    return number <= 4500.0
+}
+
+
+fun MainActivity.isFastQuantityValid(value: String): Boolean {
+    if (value.isBlank()) return true
+    val number = value.toIntOrNull() ?: return true
+    return number <= 500
+}
+
+
+fun MainActivity.handleFastPresetReplaceOnLimit(
+    field: FastField,
+    token: String,
+    applyValue: (String) -> Unit
+): Boolean {
+    if (token !in fastPresetNumericTokens) return false
+
+    showFastInputWarning()
+    applyValue(token)
+
+    when (field) {
+        FastField.WIDTH -> {
+            currentFastNumericField = FastField.WIDTH
+            currentFastActiveField = FastField.WIDTH
+            lastFastField = FastField.WIDTH
+        }
+
+        FastField.LENGTH -> {
+            currentFastNumericField = FastField.LENGTH
+            currentFastActiveField = FastField.LENGTH
+            lastFastField = FastField.LENGTH
+        }
+
+        FastField.QUANTITY -> {
+            currentFastNumericField = FastField.QUANTITY
+            currentFastActiveField = FastField.QUANTITY
+            lastFastField = FastField.QUANTITY
+        }
+
+        FastField.MODEL -> {}
+    }
+
+    updateDisplayTable()
+    triggerAutoSave()
+    return true
+}
+
+
+fun MainActivity.showFastInputWarning() {
+    Toast.makeText(
+        this,
+        "警告！系统检测到错误输入，请检查输入数据是否有误！",
+        Toast.LENGTH_SHORT
+    ).show()
+}
+
+
 

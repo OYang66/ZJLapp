@@ -2,7 +2,9 @@ package com.example.datarecorder
 
 import android.view.View
 import android.widget.PopupMenu
-
+// =========================
+// 模式切换
+// =========================
 fun MainActivity.showModeSwitchMenu(anchor: View) {
     val popup = PopupMenu(this, anchor)
     popup.menu.add(0, 1, 0, "返厂统计")

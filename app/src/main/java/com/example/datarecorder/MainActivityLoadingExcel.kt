@@ -22,7 +22,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 
-
+// =========================
+// 返厂装车 / 汇总导出
+// =========================
 private data class LoadingSummaryTripItem(
     val buildingName: String,
     val tripName: String,

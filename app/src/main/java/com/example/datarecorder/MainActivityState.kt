@@ -5,7 +5,9 @@ import java.util.Date
 import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
-
+// =========================
+// 状态保存/恢复相关
+// =========================
 fun MainActivity.getTodayPackageDate(): String {
     return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 }

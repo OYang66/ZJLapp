@@ -24,9 +24,6 @@ import android.text.Editable
 import android.text.TextWatcher
 
 
-private fun MainActivity.dp(value: Int): Int {
-    return (value * resources.displayMetrics.density).toInt()
-}
 
 private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
     if (currentProjectId > 0L) {

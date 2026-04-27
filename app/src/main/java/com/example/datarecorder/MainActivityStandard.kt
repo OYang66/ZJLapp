@@ -1,8 +1,13 @@
 package com.example.datarecorder
 import android.view.View
+import android.widget.TableRow
+import androidx.appcompat.app.AlertDialog
 
+// =========================
+// 型号统计
+// =========================
 
- fun MainActivity.handleStandardTokenInput(token: String) {
+fun MainActivity.handleStandardTokenInput(token: String) {
     if (!ensurePackageSelected()) return
 
     if (hasStandardEditingTarget()) {
@@ -176,7 +181,7 @@ fun MainActivity.deleteLastStandardInput() {
     if (!ensurePackageSelected()) return
     if (deleteFromEditingStandardCell()) return
 
-    fun cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
+    fun MainActivity.cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
 
     when (currentStandardField) {
         StandardField.INSTALL_NO -> {
@@ -371,7 +376,7 @@ fun MainActivity.deserializePackageStandardContent(content: String) {
 }
 
 
-fun deserializeStandardContentOld(content: String): List<StandardRow> {
+fun MainActivity.deserializeStandardContentOld(content: String): List<StandardRow> {
     if (content.isBlank()) return emptyList()
 
     return content.replace("\r\n", "\n")
@@ -385,4 +390,388 @@ fun deserializeStandardContentOld(content: String): List<StandardRow> {
                 quantity = parts.getOrNull(2).orEmpty()
             )
         }
+}
+
+fun MainActivity.renderStandardTable() {
+    clearStandardCellRefs()
+
+    addTableHeader("序号", "安装编号", "型号", "数量")
+
+    if (savedStandardRows.isEmpty() && currentStandardRow.isEmpty()) {
+        addStandardDataRow(
+            displayIndex = 1,
+            data = StandardRow(),
+            isCurrentRow = true,
+            savedRowIndex = null
+        )
+        return
+    }
+
+    savedStandardRows.forEachIndexed { index, row ->
+        addStandardDataRow(
+            displayIndex = index + 1,
+            data = row,
+            isCurrentRow = false,
+            savedRowIndex = index
+        )
+    }
+
+    addStandardDataRow(
+        displayIndex = savedStandardRows.size + 1,
+        data = currentStandardRow.copy(),
+        isCurrentRow = true,
+        savedRowIndex = null
+    )
+}
+
+fun MainActivity.buildStandardDataRowView(
+    displayIndex: Int,
+    data: StandardRow,
+    isCurrentRow: Boolean,
+    savedRowIndex: Int? = null
+): TableRow {
+    val row = TableRow(this)
+
+    row.addView(
+        createTableCell(
+            text = displayIndex.toString(),
+            isHeader = false,
+            highlight = isCurrentRow,
+            onLongClick = {
+                showStandardRowDeleteOptions(savedRowIndex, isCurrentRow)
+                true
+            }
+        )
+    )
+
+    val installCell = createTableCell(
+        text = data.installNo,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.INSTALL_NO
+        } else {
+            editingStandardRowIndex == null && currentStandardField == StandardField.INSTALL_NO
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectStandardSavedCell(savedRowIndex, StandardField.INSTALL_NO)
+            } else {
+                val oldField = currentStandardField
+                clearStandardEditingState()
+                pendingReplaceStandardEditing = false
+                currentStandardField = StandardField.INSTALL_NO
+                lastStandardField = StandardField.INSTALL_NO
+                if (oldField != currentStandardField) {
+                    refreshStandardSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(installCell)
+
+    val modelCell = createTableCell(
+        text = data.model,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.MODEL
+        } else {
+            editingStandardRowIndex == null && currentStandardField == StandardField.MODEL
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectStandardSavedCell(savedRowIndex, StandardField.MODEL)
+            } else {
+                val oldField = currentStandardField
+                clearStandardEditingState()
+                pendingReplaceStandardEditing = false
+                currentStandardField = StandardField.MODEL
+                lastStandardField = StandardField.MODEL
+                if (oldField != currentStandardField) {
+                    refreshStandardSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(modelCell)
+
+    val quantityCell = createTableCell(
+        text = data.quantity,
+        isHeader = false,
+        highlight = isCurrentRow,
+        selected = if (savedRowIndex != null) {
+            editingStandardRowIndex == savedRowIndex && editingStandardField == StandardField.QUANTITY
+        } else {
+            editingStandardRowIndex == null && currentStandardField == StandardField.QUANTITY
+        },
+        onClick = {
+            if (savedRowIndex != null) {
+                selectStandardSavedCell(savedRowIndex, StandardField.QUANTITY)
+            } else {
+                val oldField = currentStandardField
+                clearStandardEditingState()
+                pendingReplaceStandardEditing = false
+                currentStandardField = StandardField.QUANTITY
+                lastStandardField = StandardField.QUANTITY
+                if (oldField != currentStandardField) {
+                    refreshStandardSelectionOnly(null, true, null, true)
+                }
+            }
+        }
+    )
+    row.addView(quantityCell)
+
+    if (savedRowIndex != null) {
+        standardInstallCellMap[savedRowIndex] = installCell
+        standardModelCellMap[savedRowIndex] = modelCell
+        standardQuantityCellMap[savedRowIndex] = quantityCell
+        standardRowViewMap[savedRowIndex] = row
+    } else {
+        currentStandardInstallCell = installCell
+        currentStandardModelCell = modelCell
+        currentStandardQuantityCell = quantityCell
+        currentStandardRowView = row
+    }
+
+    return row
+}
+
+fun MainActivity.addStandardDataRow(
+    displayIndex: Int,
+    data: StandardRow,
+    isCurrentRow: Boolean,
+    savedRowIndex: Int? = null
+) {
+    tableBody.addView(
+        buildStandardDataRowView(
+            displayIndex = displayIndex,
+            data = data,
+            isCurrentRow = isCurrentRow,
+            savedRowIndex = savedRowIndex
+        )
+    )
+}
+
+fun MainActivity.clearStandardCellRefs() {
+    standardInstallCellMap.clear()
+    standardModelCellMap.clear()
+    standardQuantityCellMap.clear()
+    currentStandardInstallCell = null
+    currentStandardModelCell = null
+    currentStandardQuantityCell = null
+    standardRowViewMap.clear()
+    currentStandardRowView = null
+}
+
+
+fun MainActivity.refreshStandardVisibleCellsOnly() {
+    if (currentModeType != ModeType.STANDARD) return
+
+    if (editingStandardRowIndex != null) {
+        val rowIndex = editingStandardRowIndex ?: return
+        val row = savedStandardRows.getOrNull(rowIndex) ?: return
+        standardInstallCellMap[rowIndex]?.text = row.installNo
+        standardModelCellMap[rowIndex]?.text = row.model
+        standardQuantityCellMap[rowIndex]?.text = row.quantity
+    } else {
+        currentStandardInstallCell?.text = currentStandardRow.installNo
+        currentStandardModelCell?.text = currentStandardRow.model
+        currentStandardQuantityCell?.text = currentStandardRow.quantity
+    }
+
+    tvSummaryPrimary.visibility = View.VISIBLE
+    tvSummarySecondary.visibility = View.GONE
+    tvSummaryPrimary.text = "合计数量：${calculateStandardTotalQty()}"
+}
+
+
+fun MainActivity.refreshStandardSelectionOnly(
+    oldSavedRowIndex: Int?,
+    oldWasCurrentRow: Boolean,
+    newSavedRowIndex: Int?,
+    newWasCurrentRow: Boolean
+) {
+    if (currentModeType != ModeType.STANDARD) return
+    rebuildStandardRowOnly(oldSavedRowIndex, oldWasCurrentRow)
+    if (oldSavedRowIndex != newSavedRowIndex || oldWasCurrentRow != newWasCurrentRow) {
+        rebuildStandardRowOnly(newSavedRowIndex, newWasCurrentRow)
+    }
+}
+
+fun MainActivity.rebuildStandardRowOnly(savedRowIndex: Int?, isCurrentRow: Boolean) {
+    if (currentModeType != ModeType.STANDARD) return
+
+    val displayIndex = if (savedRowIndex != null) savedRowIndex + 1 else savedStandardRows.size + 1
+    val data = if (savedRowIndex != null) {
+        savedStandardRows.getOrNull(savedRowIndex)?.copy() ?: return
+    } else {
+        currentStandardRow.copy()
+    }
+
+    val newRow = buildStandardDataRowView(
+        displayIndex = displayIndex,
+        data = data,
+        isCurrentRow = isCurrentRow,
+        savedRowIndex = savedRowIndex
+    )
+
+    val targetIndex = if (savedRowIndex != null) savedRowIndex else tableBody.childCount - 1
+    if (targetIndex < 0 || targetIndex >= tableBody.childCount) return
+
+    tableBody.removeViewAt(targetIndex)
+    tableBody.addView(newRow, targetIndex)
+}
+
+fun MainActivity.moveEditingStandardCellToNextColumn(): Boolean {
+    val oldRowIndex = editingStandardRowIndex ?: return false
+    val oldField = editingStandardField ?: return false
+
+    editingStandardField = when (oldField) {
+        StandardField.INSTALL_NO -> StandardField.MODEL
+        StandardField.MODEL -> StandardField.QUANTITY
+        StandardField.QUANTITY -> StandardField.INSTALL_NO
+    }
+
+    currentStandardField = editingStandardField!!
+    lastStandardField = editingStandardField!!
+
+    refreshStandardSelectionOnly(
+        oldSavedRowIndex = oldRowIndex,
+        oldWasCurrentRow = false,
+        newSavedRowIndex = oldRowIndex,
+        newWasCurrentRow = false
+    )
+    return true
+}
+
+
+
+fun MainActivity.appendTextToEditingStandardCell(text: String): Boolean {
+    val rowIndex = editingStandardRowIndex ?: return false
+    val field = editingStandardField ?: return false
+    val row = savedStandardRows.getOrNull(rowIndex) ?: return false
+
+    when (field) {
+        StandardField.INSTALL_NO -> {
+            if (!canAppendToInstallNo(text)) {
+                toast("安装编号仅支持数字和 A/B/C/D/E/F/W/S/DM/LT/P/-")
+                return true
+            }
+            row.installNo = if (pendingReplaceStandardEditing) text else row.installNo + text
+        }
+
+        StandardField.MODEL -> {
+            row.model = if (pendingReplaceStandardEditing) {
+                appendModelToken("", text)
+            } else {
+                appendModelToken(row.model, text)
+            }
+        }
+
+        StandardField.QUANTITY -> {
+            if (!text.all { it.isDigit() }) {
+                if (containsLetters(text)) {
+                    toast("数量内不能输入字母")
+                }
+                return true
+            }
+            row.quantity = if (pendingReplaceStandardEditing) text else row.quantity + text
+        }
+    }
+
+    pendingReplaceStandardEditing = false
+    lastStandardField = field
+    refreshStandardVisibleCellsOnly()
+    triggerAutoSave()
+    return true
+
+}
+
+fun MainActivity.deleteFromEditingStandardCell(): Boolean {
+    val rowIndex = editingStandardRowIndex ?: return false
+    val field = editingStandardField ?: return false
+    val row = savedStandardRows.getOrNull(rowIndex) ?: return false
+
+    fun cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
+
+    when (field) {
+        StandardField.INSTALL_NO -> row.installNo = cutLast(row.installNo)
+        StandardField.MODEL -> row.model = cutLast(row.model)
+        StandardField.QUANTITY -> row.quantity = cutLast(row.quantity)
+    }
+
+    pendingReplaceStandardEditing = false
+    lastStandardField = field
+    refreshStandardVisibleCellsOnly()
+    triggerAutoSave()
+    return true
+
+}
+
+
+fun MainActivity.selectStandardSavedCell(rowIndex: Int, field: StandardField) {
+    if (rowIndex !in savedStandardRows.indices) return
+    editingStandardRowIndex = rowIndex
+    editingStandardField = field
+    currentStandardField = field
+    lastStandardField = field
+    pendingReplaceStandardEditing = true
+    updateDisplayTable()
+}
+
+// =========================
+// 删除行
+// =========================
+
+private fun MainActivity.showStandardRowDeleteOptions(savedRowIndex: Int?, isCurrentRow: Boolean) {
+    if (savedRowIndex == null && (!isCurrentRow || currentStandardRow.isEmpty())) return
+
+    val options = arrayOf("删除该行")
+
+    AlertDialog.Builder(this)
+        .setTitle("操作")
+        .setItems(options) { _, which ->
+            if (which == 0) {
+                confirmDeleteStandardRow(savedRowIndex, isCurrentRow)
+            }
+        }
+        .setNegativeButton("取消", null)
+        .show()
+}
+
+
+
+fun MainActivity.guessLastStandardField(row: StandardRow): StandardField {
+    return when {
+        row.quantity.isNotEmpty() -> StandardField.QUANTITY
+        row.model.isNotEmpty() -> StandardField.MODEL
+        row.installNo.isNotEmpty() -> StandardField.INSTALL_NO
+        else -> StandardField.INSTALL_NO
+    }
+}
+
+
+
+fun MainActivity.hasStandardEditingTarget(): Boolean {
+    return editingStandardRowIndex != null && editingStandardField != null
+}
+
+
+// =========================
+// 编辑状态
+// =========================
+
+fun MainActivity.clearStandardEditingState() {
+    editingStandardRowIndex = null
+    editingStandardField = null
+    pendingReplaceStandardEditing = false
+}
+
+
+fun MainActivity.calculateStandardTotalQty(): Int {
+    val rows = mutableListOf<StandardRow>()
+    rows.addAll(savedStandardRows)
+    if (!currentStandardRow.isEmpty()) rows.add(currentStandardRow.copy())
+    return rows.sumOf { it.quantity.toIntOrNull() ?: 1 }
 }

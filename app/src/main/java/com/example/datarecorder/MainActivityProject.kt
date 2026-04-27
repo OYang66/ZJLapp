@@ -1,7 +1,12 @@
 package com.example.datarecorder
 
+import android.view.Gravity
 import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +15,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-
+// =========================
+// 项目 / 楼栋 / 包号 / 车次”逻辑
+// =========================
 fun MainActivity.addNewPackage() {
     if (currentProjectId <= 0L) {
         toast("请先新建或选择项目")
@@ -112,13 +119,7 @@ suspend fun MainActivity.createProjectInternal(name: String, buildingName: Strin
 }
 
 
-
 suspend fun MainActivity.deleteProjectInternal(project: ProjectEntity) {
-    // 删除前先保存当前项目
-    if (currentProjectId > 0L) {
-        saveCurrentProjectContentNow()
-    }
-
     withContext(Dispatchers.IO) {
         repository.deleteProject(project)
     }
@@ -133,10 +134,10 @@ suspend fun MainActivity.deleteProjectInternal(project: ProjectEntity) {
             switchProject(nextProject)
         } else {
             val newId = withContext(Dispatchers.IO) {
-                repository.createProject("默认项目", "1#")
+                repository.createProject("默认项目", "1号楼")
             }
             val newProject = withContext(Dispatchers.IO) {
-                repository.getProjectById(newId)
+                repository.getAllProjects().firstOrNull { it.id == newId }
             }
             if (newProject != null) {
                 switchProject(newProject)
@@ -774,5 +775,161 @@ fun MainActivity.deserializeLoadingContent(content: String) {
     currentLoadingEditType = ReturnLoadingType.ALUMINUM
     currentLoadingEditIndex = if (loadingAluminumRows.isEmpty()) -1 else 0
     currentLoadingField = ReturnLoadingField.MATERIAL_NAME
+}
+
+
+
+fun MainActivity.showProjectSelectDialog() {
+    lifecycleScope.launch {
+        val projects = withContext(Dispatchers.IO) { repository.getAllProjects() }
+
+        if (projects.isEmpty()) {
+            toast("暂无项目")
+            return@launch
+        }
+
+        val scrollView = ScrollView(this@showProjectSelectDialog)
+        val container = LinearLayout(this@showProjectSelectDialog).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        scrollView.addView(container)
+
+        val dialog = AlertDialog.Builder(this@showProjectSelectDialog)
+            .setTitle("选择项目")
+            .setView(scrollView)
+            .setNegativeButton("关闭", null)
+            .create()
+
+        projects.forEach { project ->
+            val row = LinearLayout(this@showProjectSelectDialog).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(6), dp(6), dp(6), dp(6))
+            }
+
+            val nameView = TextView(this@showProjectSelectDialog).apply {
+                text = project.name
+
+                textSize = 16f
+                setTextColor(0xFF222222.toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+                )
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                setOnClickListener {
+                    lifecycleScope.launch {
+                        switchProjectById(project.id)
+                        dialog.dismiss()
+                    }
+                }
+            }
+
+            val deleteBtn = Button(this@showProjectSelectDialog).apply {
+                text = "删除"
+                textSize = 12f
+                isAllCaps = false
+                minWidth = 0
+                minimumWidth = 0
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                setOnClickListener {
+                    confirmDeleteProject(project, dialog)
+                }
+            }
+
+            row.addView(nameView)
+            row.addView(deleteBtn)
+            container.addView(row)
+        }
+
+        dialog.show()
+    }
+}
+
+
+
+fun MainActivity.showProjectMenuPopup(anchor: View) {
+    val popup = PopupMenu(this, anchor)
+    popup.menu.add(0, 1, 0, "选择项目")
+    popup.menu.add(0, 2, 1, "新建项目")
+    popup.menu.add(0, 3, 2, "查看服务器项目")
+
+    popup.setOnMenuItemClickListener { item ->
+        when (item.itemId) {
+            1 -> {
+                showProjectSelectDialog()
+                true
+            }
+            2 -> {
+                showCreateProjectDialog()
+                true
+            }
+            3 -> {
+                loadServerProjectList()
+                true
+            }
+            else -> false
+        }
+    }
+    popup.show()
+}
+
+
+
+fun MainActivity.rebuildPackageMapsFromProject(project: ProjectEntity) {
+    buildingStandardContentMap.clear()
+    buildingFastContentMap.clear()
+    buildingLoadingContentMap.clear()
+    buildingQualityContentMap.clear()
+
+
+    val defaultBuilding = if (project.buildingName.isBlank()) "1号楼" else project.buildingName
+
+    val (standardCurrentBuilding, standardMap) =
+        parseBuildingScopedContent(project.standardContent, defaultBuilding)
+    val (fastCurrentBuilding, fastMap) =
+        parseBuildingScopedContent(project.fastContent, defaultBuilding)
+    val (loadingCurrentBuilding, loadingMap) =
+        parseBuildingScopedContent(project.loadingContent, defaultBuilding)
+    val (qualityCurrentBuilding, qualityMap) =
+        parseBuildingScopedContent(project.qualityContent, defaultBuilding)
+
+    buildingStandardContentMap.putAll(standardMap)
+    buildingFastContentMap.putAll(fastMap)
+    buildingLoadingContentMap.putAll(loadingMap)
+    buildingQualityContentMap.putAll(qualityMap)
+
+
+    val allBuildings = linkedSetOf<String>()
+    allBuildings.add(defaultBuilding)
+    allBuildings.addAll(buildingStandardContentMap.keys)
+    allBuildings.addAll(buildingFastContentMap.keys)
+    allBuildings.addAll(buildingLoadingContentMap.keys)
+    allBuildings.addAll(buildingQualityContentMap.keys)
+
+    currentBuildingName = listOf(
+        project.buildingName,
+        standardCurrentBuilding,
+        fastCurrentBuilding,
+        loadingCurrentBuilding,
+        qualityCurrentBuilding
+    ).firstOrNull { it.isNotBlank() && allBuildings.contains(it) } ?: defaultBuilding
+
+    allBuildings.forEach {
+        buildingStandardContentMap.putIfAbsent(it, "")
+        buildingFastContentMap.putIfAbsent(it, "")
+        buildingLoadingContentMap.putIfAbsent(it, "")
+        buildingQualityContentMap.putIfAbsent(it, "")
+    }
+
+
+    // 切换项目时，绝对不能先保存当前屏幕旧数据到新项目
+    loadBuildingScopeToScreen(currentBuildingName, saveCurrentFirst = false)
+    ensureDefaultPackageExists()
+    ensureDefaultLoadingTripExists()
+    updatePackageButtonText()
+
 }
 

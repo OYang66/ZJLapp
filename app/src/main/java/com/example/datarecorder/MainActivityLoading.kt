@@ -21,7 +21,9 @@ import android.widget.EditText
 import android.widget.NumberPicker
 import java.util.Locale
 
-
+// =========================
+// 返厂装车
+// =========================
 
 fun MainActivity.initLoadingModeArea() {
     val btnAddMaterial = findViewById<Button>(R.id.btnAddIronMaterial)
