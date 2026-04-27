@@ -253,9 +253,7 @@ fun MainActivity.finishCurrentFastRow() {
     triggerAutoSave()
 }
 
-
-
- fun MainActivity.deleteLastFastInput() {
+fun MainActivity.deleteLastFastInput() {
     if (!ensurePackageSelected()) return
 
     if (hasFastEditingTarget()) {
@@ -263,78 +261,23 @@ fun MainActivity.finishCurrentFastRow() {
         return
     }
 
-    fun MainActivity.cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
+    fun cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
 
-    when (lastFastField) {
+    when (currentFastActiveField) {
         FastField.WIDTH -> {
             if (currentFastRow.width.isNotEmpty()) {
                 currentFastRow.width = cutLast(currentFastRow.width)
                 currentFastNumericField = FastField.WIDTH
                 currentFastActiveField = FastField.WIDTH
                 lastFastField = FastField.WIDTH
-            } else if (currentFastRow.model.isNotEmpty()) {
-                currentFastRow.model = cutLast(currentFastRow.model)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.MODEL
-                lastFastField = FastField.MODEL
-            } else if (currentFastRow.length.isNotEmpty()) {
-                currentFastRow.length = cutLast(currentFastRow.length)
-                currentFastNumericField = FastField.LENGTH
-                currentFastActiveField = FastField.LENGTH
-                lastFastField = FastField.LENGTH
-            } else if (currentFastRow.quantity.isNotEmpty()) {
-                currentFastRow.quantity = cutLast(currentFastRow.quantity)
-                currentFastNumericField = FastField.QUANTITY
-                currentFastActiveField = FastField.QUANTITY
-                lastFastField = FastField.QUANTITY
-            } else if (savedFastRows.isNotEmpty()) {
-                currentFastRow = savedFastRows.removeAt(savedFastRows.lastIndex)
-                lastFastField = guessLastFastField(currentFastRow)
-                currentFastNumericField = when (lastFastField) {
-                    FastField.WIDTH -> FastField.WIDTH
-                    FastField.MODEL -> FastField.WIDTH
-                    FastField.LENGTH -> FastField.LENGTH
-                    FastField.QUANTITY -> FastField.QUANTITY
-                }
-                currentFastActiveField = lastFastField
-                deleteLastFastInput()
-                return
             }
         }
 
         FastField.MODEL -> {
             if (currentFastRow.model.isNotEmpty()) {
                 currentFastRow.model = cutLast(currentFastRow.model)
-                currentFastNumericField = FastField.WIDTH
                 currentFastActiveField = FastField.MODEL
                 lastFastField = FastField.MODEL
-            } else if (currentFastRow.width.isNotEmpty()) {
-                currentFastRow.width = cutLast(currentFastRow.width)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.WIDTH
-                lastFastField = FastField.WIDTH
-            } else if (currentFastRow.length.isNotEmpty()) {
-                currentFastRow.length = cutLast(currentFastRow.length)
-                currentFastNumericField = FastField.LENGTH
-                currentFastActiveField = FastField.LENGTH
-                lastFastField = FastField.LENGTH
-            } else if (currentFastRow.quantity.isNotEmpty()) {
-                currentFastRow.quantity = cutLast(currentFastRow.quantity)
-                currentFastNumericField = FastField.QUANTITY
-                currentFastActiveField = FastField.QUANTITY
-                lastFastField = FastField.QUANTITY
-            } else if (savedFastRows.isNotEmpty()) {
-                currentFastRow = savedFastRows.removeAt(savedFastRows.lastIndex)
-                lastFastField = guessLastFastField(currentFastRow)
-                currentFastNumericField = when (lastFastField) {
-                    FastField.WIDTH -> FastField.WIDTH
-                    FastField.MODEL -> FastField.WIDTH
-                    FastField.LENGTH -> FastField.LENGTH
-                    FastField.QUANTITY -> FastField.QUANTITY
-                }
-                currentFastActiveField = lastFastField
-                deleteLastFastInput()
-                return
             }
         }
 
@@ -344,33 +287,6 @@ fun MainActivity.finishCurrentFastRow() {
                 currentFastNumericField = FastField.LENGTH
                 currentFastActiveField = FastField.LENGTH
                 lastFastField = FastField.LENGTH
-            } else if (currentFastRow.model.isNotEmpty()) {
-                currentFastRow.model = cutLast(currentFastRow.model)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.MODEL
-                lastFastField = FastField.MODEL
-            } else if (currentFastRow.width.isNotEmpty()) {
-                currentFastRow.width = cutLast(currentFastRow.width)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.WIDTH
-                lastFastField = FastField.WIDTH
-            } else if (currentFastRow.quantity.isNotEmpty()) {
-                currentFastRow.quantity = cutLast(currentFastRow.quantity)
-                currentFastNumericField = FastField.QUANTITY
-                currentFastActiveField = FastField.QUANTITY
-                lastFastField = FastField.QUANTITY
-            } else if (savedFastRows.isNotEmpty()) {
-                currentFastRow = savedFastRows.removeAt(savedFastRows.lastIndex)
-                lastFastField = guessLastFastField(currentFastRow)
-                currentFastNumericField = when (lastFastField) {
-                    FastField.WIDTH -> FastField.WIDTH
-                    FastField.MODEL -> FastField.WIDTH
-                    FastField.LENGTH -> FastField.LENGTH
-                    FastField.QUANTITY -> FastField.QUANTITY
-                }
-                currentFastActiveField = lastFastField
-                deleteLastFastInput()
-                return
             }
         }
 
@@ -380,41 +296,15 @@ fun MainActivity.finishCurrentFastRow() {
                 currentFastNumericField = FastField.QUANTITY
                 currentFastActiveField = FastField.QUANTITY
                 lastFastField = FastField.QUANTITY
-            } else if (currentFastRow.length.isNotEmpty()) {
-                currentFastRow.length = cutLast(currentFastRow.length)
-                currentFastNumericField = FastField.LENGTH
-                currentFastActiveField = FastField.LENGTH
-                lastFastField = FastField.LENGTH
-            } else if (currentFastRow.model.isNotEmpty()) {
-                currentFastRow.model = cutLast(currentFastRow.model)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.MODEL
-                lastFastField = FastField.MODEL
-            } else if (currentFastRow.width.isNotEmpty()) {
-                currentFastRow.width = cutLast(currentFastRow.width)
-                currentFastNumericField = FastField.WIDTH
-                currentFastActiveField = FastField.WIDTH
-                lastFastField = FastField.WIDTH
-            } else if (savedFastRows.isNotEmpty()) {
-                currentFastRow = savedFastRows.removeAt(savedFastRows.lastIndex)
-                lastFastField = guessLastFastField(currentFastRow)
-                currentFastNumericField = when (lastFastField) {
-                    FastField.WIDTH -> FastField.WIDTH
-                    FastField.MODEL -> FastField.WIDTH
-                    FastField.LENGTH -> FastField.LENGTH
-                    FastField.QUANTITY -> FastField.QUANTITY
-                }
-                currentFastActiveField = lastFastField
-                deleteLastFastInput()
-                return
             }
         }
     }
 
-     refreshFastVisibleCellsOnly()
-     triggerAutoSave()
+    refreshFastVisibleCellsOnly()
+    triggerAutoSave()
+}
 
- }
+
 
  fun MainActivity.clearFastRows() {
     clearFastEditingState()
