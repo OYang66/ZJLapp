@@ -172,70 +172,38 @@ fun MainActivity.finishCurrentStandardRow() {
 }
 
 
-
 fun MainActivity.deleteLastStandardInput() {
     if (!ensurePackageSelected()) return
     if (deleteFromEditingStandardCell()) return
 
     fun cutLast(str: String): String = if (str.isNotEmpty()) str.dropLast(1) else str
 
-    when (lastStandardField) {
+    when (currentStandardField) {
         StandardField.INSTALL_NO -> {
             if (currentStandardRow.installNo.isNotEmpty()) {
                 currentStandardRow.installNo = cutLast(currentStandardRow.installNo)
-            } else if (currentStandardRow.model.isNotEmpty()) {
-                currentStandardRow.model = cutLast(currentStandardRow.model)
-                lastStandardField = StandardField.MODEL
-            } else if (currentStandardRow.quantity.isNotEmpty()) {
-                currentStandardRow.quantity = cutLast(currentStandardRow.quantity)
-                lastStandardField = StandardField.QUANTITY
-            } else if (savedStandardRows.isNotEmpty()) {
-                currentStandardRow = savedStandardRows.removeAt(savedStandardRows.lastIndex)
-                lastStandardField = guessLastStandardField(currentStandardRow)
-                deleteLastStandardInput()
-                return
+                lastStandardField = StandardField.INSTALL_NO
             }
         }
 
         StandardField.MODEL -> {
             if (currentStandardRow.model.isNotEmpty()) {
                 currentStandardRow.model = cutLast(currentStandardRow.model)
-            } else if (currentStandardRow.installNo.isNotEmpty()) {
-                currentStandardRow.installNo = cutLast(currentStandardRow.installNo)
-                lastStandardField = StandardField.INSTALL_NO
-            } else if (currentStandardRow.quantity.isNotEmpty()) {
-                currentStandardRow.quantity = cutLast(currentStandardRow.quantity)
-                lastStandardField = StandardField.QUANTITY
-            } else if (savedStandardRows.isNotEmpty()) {
-                currentStandardRow = savedStandardRows.removeAt(savedStandardRows.lastIndex)
-                lastStandardField = guessLastStandardField(currentStandardRow)
-                deleteLastStandardInput()
-                return
+                lastStandardField = StandardField.MODEL
             }
         }
 
         StandardField.QUANTITY -> {
             if (currentStandardRow.quantity.isNotEmpty()) {
                 currentStandardRow.quantity = cutLast(currentStandardRow.quantity)
-            } else if (currentStandardRow.model.isNotEmpty()) {
-                currentStandardRow.model = cutLast(currentStandardRow.model)
-                lastStandardField = StandardField.MODEL
-            } else if (currentStandardRow.installNo.isNotEmpty()) {
-                currentStandardRow.installNo = cutLast(currentStandardRow.installNo)
-                lastStandardField = StandardField.INSTALL_NO
-            } else if (savedStandardRows.isNotEmpty()) {
-                currentStandardRow = savedStandardRows.removeAt(savedStandardRows.lastIndex)
-                lastStandardField = guessLastStandardField(currentStandardRow)
-                deleteLastStandardInput()
-                return
+                lastStandardField = StandardField.QUANTITY
             }
         }
     }
 
-     refreshStandardVisibleCellsOnly()
-     triggerAutoSave()
-
- }
+    refreshStandardVisibleCellsOnly()
+    triggerAutoSave()
+}
 
 
 fun MainActivity.serializeStandardContent(): String {
