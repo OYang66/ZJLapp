@@ -237,7 +237,6 @@ fun MainActivity.deleteLastStandardInput() {
 
  }
 
-
 fun MainActivity.serializeStandardContent(): String {
     saveScreenDataToCurrentPackage()
 
@@ -251,8 +250,7 @@ fun MainActivity.serializeStandardContent(): String {
 
     if (allPackageNames.isEmpty()) return ""
 
-    val builder = StringBuilder()
-    builder.append("#CURRENT_PACKAGE=").append(currentPackageName).append("\n")
+    val packageBlocks = StringBuilder()
 
     allPackageNames.forEach { packageName ->
         val rows = packageStandardRowsMap[packageName] ?: mutableListOf()
@@ -265,28 +263,34 @@ fun MainActivity.serializeStandardContent(): String {
             return@forEach
         }
 
-        builder.append("#PACKAGE=").append(packageName).append("\n")
+        packageBlocks.append("#PACKAGE=").append(packageName).append("\n")
 
         val packageDate = packageDateMap[packageName].orEmpty()
-        builder.append("#PACKAGE_DATE=").append(packageDate).append("\n")
+        packageBlocks.append("#PACKAGE_DATE=").append(packageDate).append("\n")
 
-        builder.append("#ROWS").append("\n")
+        packageBlocks.append("#ROWS").append("\n")
         rows.forEach {
-            builder.append(
+            packageBlocks.append(
                 listOf(it.installNo, it.model, it.quantity).joinToString("\t")
             ).append("\n")
         }
 
-        builder.append("#CURRENT_ROW").append("\n")
-        builder.append(
+        packageBlocks.append("#CURRENT_ROW").append("\n")
+        packageBlocks.append(
             listOf(current.installNo, current.model, current.quantity).joinToString("\t")
         ).append("\n")
 
-        builder.append("#END_PACKAGE").append("\n")
+        packageBlocks.append("#END_PACKAGE").append("\n")
     }
 
-    return builder.toString()
+    if (packageBlocks.isEmpty()) return ""
+
+    return buildString {
+        append("#CURRENT_PACKAGE=").append(currentPackageName).append("\n")
+        append(packageBlocks)
+    }
 }
+
 fun MainActivity.deserializePackageStandardContent(content: String) {
     packageStandardRowsMap.clear()
     packageCurrentStandardRowMap.clear()
@@ -294,6 +298,10 @@ fun MainActivity.deserializePackageStandardContent(content: String) {
     if (content.isBlank()) return
 
     if (!content.contains("#PACKAGE=")) {
+        if (content.trim().startsWith("#")) {
+            return
+        }
+
         val oldRows = deserializeStandardContentOld(content)
         if (oldRows.isNotEmpty()) {
             val defaultPackage = "第1包"
@@ -304,6 +312,7 @@ fun MainActivity.deserializePackageStandardContent(content: String) {
         }
         return
     }
+
 
     val lines = content.replace("\r\n", "\n").split("\n")
     var packageName = ""

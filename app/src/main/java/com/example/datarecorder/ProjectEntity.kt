@@ -11,5 +11,6 @@ data class ProjectEntity(
     val buildingName: String = "",
     val standardContent: String = "[]",
     val fastContent: String = "[]",
-    val loadingContent: String = ""
+    val loadingContent: String = "",
+    val qualityContent: String = ""
 )

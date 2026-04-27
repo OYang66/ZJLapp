@@ -3,5 +3,6 @@ package com.example.datarecorder
 enum class ModeType {
     STANDARD,
     FAST,
-    RETURN_LOADING
+    RETURN_LOADING,
+    QUALITY_FEEDBACK
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.datarecorder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "1.9.1"
+        versionCode = 21
+        versionName = "2.3.0"
     }
 
     buildFeatures {
@@ -63,7 +63,7 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.26.1")
     implementation("commons-io:commons-io:2.15.1")
     implementation("com.github.virtuald:curvesapi:1.08")
-
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
 
 }
 

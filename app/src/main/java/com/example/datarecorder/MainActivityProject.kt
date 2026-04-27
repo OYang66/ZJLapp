@@ -44,6 +44,12 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
         return
     }
 
+    if (currentModeType == ModeType.QUALITY_FEEDBACK) {
+        showQualityFloorInputDialog()
+        return
+    }
+
+
     val popup = PopupMenu(this, anchor)
     var order = 0
 

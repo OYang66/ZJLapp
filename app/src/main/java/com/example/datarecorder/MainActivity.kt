@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity() {
     var loadingIronWeightMode: LoadingWeightMode = LoadingWeightMode.UNSELECTED
 
 
+
     private val standardInstallCellMap = linkedMapOf<Int, TextView>()
     private val standardModelCellMap = linkedMapOf<Int, TextView>()
     private val standardQuantityCellMap = linkedMapOf<Int, TextView>()
@@ -86,6 +87,22 @@ class MainActivity : AppCompatActivity() {
     val buildingStandardContentMap = linkedMapOf<String, String>()
     val buildingFastContentMap = linkedMapOf<String, String>()
     val buildingLoadingContentMap = linkedMapOf<String, String>()
+    val buildingQualityContentMap = linkedMapOf<String, String>()
+
+    var currentModeType: ModeType = ModeType.STANDARD
+    var currentLoadingTripName: String = ""
+
+    var pendingQualityPhotoRowIndex: Int? = null
+    var pendingQualityPhotoUri: Uri? = null
+
+    var currentQualityFloorLabel: String = "1"
+
+
+    val qualityRows = mutableListOf<QualityFeedbackRow>()
+    var currentQualityRow = QualityFeedbackRow()
+
+    var editingQualityRowIndex: Int? = null
+    var editingQualityField: QualityFeedbackField = QualityFeedbackField.MATERIAL_TYPE
 
     lateinit var db: AppDatabase
     lateinit var repository: ProjectRepository
@@ -99,6 +116,9 @@ class MainActivity : AppCompatActivity() {
     lateinit var loadingTable: TableLayout
     lateinit var tvLoadingIronWeighbridge: TextView
     var loadingAluminumUsePackageCount: Boolean = false
+
+    var pendingExportQualityFileName: String? = null
+    var pendingExportQualityBytes: ByteArray? = null
 
     lateinit var btnProjectMenu: Button
     lateinit var btnPackageMenu: Button
@@ -119,8 +139,14 @@ class MainActivity : AppCompatActivity() {
     lateinit var layoutSlab: GridLayout
     lateinit var layoutStair: GridLayout
 
+    lateinit var layoutQualityWall: GridLayout
+    lateinit var layoutQualityBeam: GridLayout
+    lateinit var layoutQualitySlab: GridLayout
+    lateinit var layoutQualityStair: GridLayout
+
     lateinit var standardModeContainer: LinearLayout
     lateinit var fastModeContainer: LinearLayout
+    lateinit var qualityModeContainer: LinearLayout
 
     lateinit var layoutFastTail: GridLayout
     lateinit var layoutFastWidth: GridLayout
@@ -134,8 +160,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var layoutFastModel: GridLayout
     lateinit var loadingModeContainer: LinearLayout
 
-    var currentModeType: ModeType = ModeType.STANDARD
-    var currentLoadingTripName: String = ""
+
     var currentLoadingEditType: ReturnLoadingType = ReturnLoadingType.ALUMINUM
     var currentLoadingEditIndex: Int = -1
     var currentLoadingField: ReturnLoadingField = ReturnLoadingField.MATERIAL_NAME
@@ -144,6 +169,14 @@ class MainActivity : AppCompatActivity() {
     val loadingAluminumRows = mutableListOf<ReturnLoadingRow>()
     val loadingIronRows = mutableListOf<ReturnLoadingRow>()
     var vehicleInfo = VehicleInfo()
+
+
+
+
+
+    var pendingCameraImageUri: Uri? = null
+
+
 
 
     lateinit var headerHorizontalScroll: HorizontalScrollView
@@ -208,6 +241,34 @@ class MainActivity : AppCompatActivity() {
             exportCurrentProjectToSelectedFolder(uri)
         }
 
+    val qualityPhotoCameraLauncher =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+            if (!success) return@registerForActivityResult
+
+            val uri = pendingQualityPhotoUri ?: return@registerForActivityResult
+            addPhotoToQualityRow(
+                rowIndex = pendingQualityPhotoRowIndex,
+                uri = uri
+            )
+        }
+
+    val qualityPhotoGalleryLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+            }
+
+            addPhotoToQualityRow(
+                rowIndex = pendingQualityPhotoRowIndex,
+                uri = uri
+            )
+        }
 
     val modeNameStandard = "型号统计"
     val modeNameFast = "返厂统计"
@@ -216,6 +277,11 @@ class MainActivity : AppCompatActivity() {
     private val beamKeys = listOf("B", "BS", "BC", "BP", "X", "N")
     private val slabKeys = listOf("S", "SC", "M", "MB", "SP", "Q")
     private val stairKeys = listOf("LT", "JT", "GT", "DM", "H", "P")
+
+    val qualityWallKeys = listOf("W", "WE", "WED", "BQ", "IC", "ICA")
+    val qualityBeamKeys = listOf("B", "BS", "BC", "BP", "X", "N")
+    val qualitySlabKeys = listOf("S", "SC", "M", "MB", "SP", "Q")
+    val qualityStairKeys = listOf("LT", "JT", "GT", "DM", "H", "P")
 
     val fastTailKeys = listOf("50", "45", "95", "65", "85")
     val fastWidthKeys = listOf("100", "200", "300", "400", "500")
@@ -286,7 +352,20 @@ class MainActivity : AppCompatActivity() {
         R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9,
         R.id.btn00, R.id.btnDot,
         R.id.btnA, R.id.btnB, R.id.btnC, R.id.btnD,
-        R.id.btnE, R.id.btnF
+        R.id.btnE, R.id.btnF,
+
+        R.id.btnQualityPlus,
+        R.id.btnQualityMultiply,
+        R.id.btnQualityBrackets,
+        R.id.btnQualitySpace,
+        R.id.btnQualityBackspace,
+        R.id.btnQualityA, R.id.btnQualityB, R.id.btnQualityC,
+        R.id.btnQualityD, R.id.btnQualityE, R.id.btnQualityF,
+        R.id.btnQuality0, R.id.btnQuality1, R.id.btnQuality2, R.id.btnQuality3,
+        R.id.btnQuality4, R.id.btnQuality5, R.id.btnQuality6, R.id.btnQuality7,
+        R.id.btnQuality8, R.id.btnQuality9, R.id.btnQuality00, R.id.btnQualityDot,
+        R.id.btnQualityNextColumn, R.id.btnQualityNextRow
+
     )
 
     private val forceLogoutReceiver = object : BroadcastReceiver() {
@@ -328,6 +407,9 @@ class MainActivity : AppCompatActivity() {
         initLoadingModeArea()
         updateAvatarView()
         updatePackageButtonText()
+        initQualityModeArea()
+        initQualityInputButtons()
+
 
         currentModeType = readLastModeType()
         isFastMode = currentModeType == ModeType.FAST
@@ -421,9 +503,14 @@ class MainActivity : AppCompatActivity() {
         layoutBeam = findViewById(R.id.layoutBeam)
         layoutSlab = findViewById(R.id.layoutSlab)
         layoutStair = findViewById(R.id.layoutStair)
+        layoutQualityWall = findViewById(R.id.layoutQualityWall)
+        layoutQualityBeam = findViewById(R.id.layoutQualityBeam)
+        layoutQualitySlab = findViewById(R.id.layoutQualitySlab)
+        layoutQualityStair = findViewById(R.id.layoutQualityStair)
 
         standardModeContainer = findViewById(R.id.standardModeContainer)
         fastModeContainer = findViewById(R.id.fastModeContainer)
+        qualityModeContainer = findViewById(R.id.qualityModeContainer)
 
         layoutFastTail = findViewById(R.id.layoutFastTail)
         layoutFastWidth = findViewById(R.id.layoutFastWidth)
@@ -503,6 +590,7 @@ class MainActivity : AppCompatActivity() {
         standardModeContainer.visibility = if (fast) View.GONE else View.VISIBLE
         fastModeContainer.visibility = if (fast) View.VISIBLE else View.GONE
         loadingModeContainer.visibility = View.GONE
+        qualityModeContainer.visibility = View.GONE
 
         btnModeToggle.text = "切换模式"
         updateDisplayTable()
@@ -681,14 +769,6 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun generateNextPackageName(): String {
-        val maxIndex = getAllPackageNamesInOrder()
-            .mapNotNull { name ->
-                Regex("""第(\d+)包""").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            }
-            .maxOrNull() ?: 0
-        return "第${maxIndex + 1}包"
-    }
 
 
     private fun addNewPackage() {
@@ -1708,7 +1788,6 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-
     fun updateDisplayTable() {
         when (currentModeType) {
             ModeType.FAST -> {
@@ -1735,12 +1814,21 @@ class MainActivity : AppCompatActivity() {
                 tvSummarySecondary.visibility = View.GONE
                 renderLoadingTable()
             }
+
+            ModeType.QUALITY_FEEDBACK -> {
+                tableHeader.removeAllViews()
+                tableBody.removeAllViews()
+                renderQualityFeedbackTable()
+                tvSummaryPrimary.visibility = View.GONE
+                tvSummarySecondary.visibility = View.GONE
+            }
         }
 
         if (editingStandardRowIndex == null && editingFastRowIndex == null) {
             scrollDisplayToLatest()
         }
     }
+
 
 
     private fun renderStandardTable() {
@@ -2181,7 +2269,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createCellBackground(
+    fun createCellBackground(
         fillColor: Int,
         strokeColor: Int,
         strokeWidthDp: Int,
@@ -2233,6 +2321,7 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
+
     private fun readLastModeType(): ModeType {
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val modeName = prefs.getString("last_mode_type", ModeType.STANDARD.name)
@@ -2241,7 +2330,11 @@ class MainActivity : AppCompatActivity() {
         return try {
             ModeType.valueOf(modeName)
         } catch (_: Exception) {
-            if (prefs.getBoolean("is_fast_mode", false)) ModeType.FAST else ModeType.STANDARD
+            if (prefs.getBoolean("is_fast_mode", false)) {
+                ModeType.FAST
+            } else {
+                ModeType.STANDARD
+            }
         }
     }
 
@@ -2835,7 +2928,9 @@ class MainActivity : AppCompatActivity() {
                         ModeType.STANDARD -> switchMode(ModeType.STANDARD)
                         ModeType.FAST -> switchMode(ModeType.FAST)
                         ModeType.RETURN_LOADING -> switchMode(ModeType.RETURN_LOADING)
+                        ModeType.QUALITY_FEEDBACK -> switchMode(ModeType.QUALITY_FEEDBACK)
                     }
+
 
                     updatePackageButtonText()
                     updateDisplayTable()
@@ -2872,9 +2967,11 @@ class MainActivity : AppCompatActivity() {
             buildingName = currentBuildingName,
             standardContent = serializeProjectStandardBuildingsContent(),
             fastContent = serializeProjectFastBuildingsContent(),
-            loadingContent = serializeProjectLoadingBuildingsContent()
+            loadingContent = serializeProjectLoadingBuildingsContent(),
+            qualityContent = serializeProjectQualityBuildingsContent()
         )
     }
+
 
 
 
@@ -2928,6 +3025,8 @@ class MainActivity : AppCompatActivity() {
         buildingStandardContentMap.clear()
         buildingFastContentMap.clear()
         buildingLoadingContentMap.clear()
+        buildingQualityContentMap.clear()
+
 
         val defaultBuilding = if (project.buildingName.isBlank()) "1号楼" else project.buildingName
 
@@ -2937,32 +3036,44 @@ class MainActivity : AppCompatActivity() {
             parseBuildingScopedContent(project.fastContent, defaultBuilding)
         val (loadingCurrentBuilding, loadingMap) =
             parseBuildingScopedContent(project.loadingContent, defaultBuilding)
+        val (qualityCurrentBuilding, qualityMap) =
+            parseBuildingScopedContent(project.qualityContent, defaultBuilding)
 
         buildingStandardContentMap.putAll(standardMap)
         buildingFastContentMap.putAll(fastMap)
         buildingLoadingContentMap.putAll(loadingMap)
+        buildingQualityContentMap.putAll(qualityMap)
+
 
         val allBuildings = linkedSetOf<String>()
         allBuildings.add(defaultBuilding)
         allBuildings.addAll(buildingStandardContentMap.keys)
         allBuildings.addAll(buildingFastContentMap.keys)
         allBuildings.addAll(buildingLoadingContentMap.keys)
+        allBuildings.addAll(buildingQualityContentMap.keys)
 
         currentBuildingName = listOf(
             project.buildingName,
             standardCurrentBuilding,
             fastCurrentBuilding,
-            loadingCurrentBuilding
+            loadingCurrentBuilding,
+            qualityCurrentBuilding
         ).firstOrNull { it.isNotBlank() && allBuildings.contains(it) } ?: defaultBuilding
 
         allBuildings.forEach {
             buildingStandardContentMap.putIfAbsent(it, "")
             buildingFastContentMap.putIfAbsent(it, "")
             buildingLoadingContentMap.putIfAbsent(it, "")
+            buildingQualityContentMap.putIfAbsent(it, "")
         }
+
 
         // 切换项目时，绝对不能先保存当前屏幕旧数据到新项目
         loadBuildingScopeToScreen(currentBuildingName, saveCurrentFirst = false)
+        ensureDefaultPackageExists()
+        ensureDefaultLoadingTripExists()
+        updatePackageButtonText()
+
     }
 
 

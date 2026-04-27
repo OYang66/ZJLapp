@@ -8,6 +8,7 @@ fun MainActivity.showModeSwitchMenu(anchor: View) {
     popup.menu.add(0, 1, 0, "返厂统计")
     popup.menu.add(0, 2, 1, "型号统计")
     popup.menu.add(0, 3, 2, "返厂装车")
+    popup.menu.add(0, 4, 3, "质量反馈")
 
     popup.setOnMenuItemClickListener { item ->
         when (item.itemId) {
@@ -21,6 +22,10 @@ fun MainActivity.showModeSwitchMenu(anchor: View) {
             }
             3 -> {
                 switchMode(ModeType.RETURN_LOADING)
+                true
+            }
+            4 -> {
+                switchMode(ModeType.QUALITY_FEEDBACK)
                 true
             }
             else -> false
@@ -42,6 +47,7 @@ fun MainActivity.switchMode(mode: ModeType) {
     standardModeContainer.visibility = if (mode == ModeType.STANDARD) View.VISIBLE else View.GONE
     fastModeContainer.visibility = if (mode == ModeType.FAST) View.VISIBLE else View.GONE
     loadingModeContainer.visibility = if (mode == ModeType.RETURN_LOADING) View.VISIBLE else View.GONE
+    qualityModeContainer.visibility = if (mode == ModeType.QUALITY_FEEDBACK) View.VISIBLE else View.GONE
 
     btnModeToggle.text = "切换模式"
 
@@ -67,6 +73,11 @@ fun MainActivity.switchMode(mode: ModeType) {
         ModeType.RETURN_LOADING -> {
             btnPackageMenu.text = if (currentLoadingTripName.isBlank()) "车次" else currentLoadingTripName
             renderLoadingTable()
+        }
+
+        ModeType.QUALITY_FEEDBACK -> {
+            updatePackageButtonText()
+            renderQualityFeedbackTable()
         }
     }
 }

@@ -467,7 +467,6 @@ fun MainActivity.finishCurrentFastRow() {
         }
     }
 }
-
 fun MainActivity.serializeFastContent(): String {
     saveScreenDataToCurrentPackage()
 
@@ -481,8 +480,7 @@ fun MainActivity.serializeFastContent(): String {
 
     if (allPackageNames.isEmpty()) return ""
 
-    val builder = StringBuilder()
-    builder.append("#CURRENT_PACKAGE=").append(currentPackageName).append("\n")
+    val packageBlocks = StringBuilder()
 
     allPackageNames.forEach { packageName ->
         val rows = packageFastRowsMap[packageName] ?: mutableListOf()
@@ -495,27 +493,32 @@ fun MainActivity.serializeFastContent(): String {
             return@forEach
         }
 
-        builder.append("#PACKAGE=").append(packageName).append("\n")
+        packageBlocks.append("#PACKAGE=").append(packageName).append("\n")
 
         val packageDate = packageDateMap[packageName].orEmpty()
-        builder.append("#PACKAGE_DATE=").append(packageDate).append("\n")
+        packageBlocks.append("#PACKAGE_DATE=").append(packageDate).append("\n")
 
-        builder.append("#ROWS").append("\n")
+        packageBlocks.append("#ROWS").append("\n")
         rows.forEach {
-            builder.append(
+            packageBlocks.append(
                 listOf(it.width, it.model, it.length, it.quantity).joinToString("\t")
             ).append("\n")
         }
 
-        builder.append("#CURRENT_ROW").append("\n")
-        builder.append(
+        packageBlocks.append("#CURRENT_ROW").append("\n")
+        packageBlocks.append(
             listOf(current.width, current.model, current.length, current.quantity).joinToString("\t")
         ).append("\n")
 
-        builder.append("#END_PACKAGE").append("\n")
+        packageBlocks.append("#END_PACKAGE").append("\n")
     }
 
-    return builder.toString()
+    if (packageBlocks.isEmpty()) return ""
+
+    return buildString {
+        append("#CURRENT_PACKAGE=").append(currentPackageName).append("\n")
+        append(packageBlocks)
+    }
 }
 
 fun MainActivity.deserializePackageFastContent(content: String) {
@@ -525,6 +528,10 @@ fun MainActivity.deserializePackageFastContent(content: String) {
     if (content.isBlank()) return
 
     if (!content.contains("#PACKAGE=")) {
+        if (content.trim().startsWith("#")) {
+            return
+        }
+
         val oldRows = deserializeFastContentOld(content)
         if (oldRows.isNotEmpty()) {
             val defaultPackage = "第1包"
@@ -535,6 +542,7 @@ fun MainActivity.deserializePackageFastContent(content: String) {
         }
         return
     }
+
 
     val lines = content.replace("\r\n", "\n").split("\n")
     var packageName = ""

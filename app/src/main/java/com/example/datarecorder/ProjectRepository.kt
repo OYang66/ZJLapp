@@ -12,7 +12,8 @@ class ProjectRepository(private val dao: ProjectDao) {
                 buildingName = buildingName,
                 standardContent = "",
                 fastContent = "",
-                loadingContent = ""
+                loadingContent = "",
+                qualityContent = ""
             )
         )
     }
@@ -23,7 +24,8 @@ class ProjectRepository(private val dao: ProjectDao) {
         buildingName: String,
         standardContent: String,
         fastContent: String,
-        loadingContent: String
+        loadingContent: String,
+        qualityContent: String
     ) {
         dao.update(
             ProjectEntity(
@@ -32,7 +34,8 @@ class ProjectRepository(private val dao: ProjectDao) {
                 buildingName = buildingName,
                 standardContent = standardContent,
                 fastContent = fastContent,
-                loadingContent = loadingContent
+                loadingContent = loadingContent,
+                qualityContent = qualityContent
             )
         )
     }

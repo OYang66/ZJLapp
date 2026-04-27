@@ -8,6 +8,9 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import kotlinx.coroutines.launch
+import android.content.ClipData
+import android.content.Intent
+import androidx.core.content.FileProvider
 
 fun MainActivity.loadServerProjectList() {
     val activity = this
@@ -72,7 +75,6 @@ fun MainActivity.loadServerStatSummary() {
         }
     }
 }
-
 fun MainActivity.uploadCurrentModeProjectToServer() {
     if (currentProjectId <= 0L) {
         toast("请先选择项目")
@@ -86,16 +88,88 @@ fun MainActivity.uploadCurrentModeProjectToServer() {
             saveScreenDataToCurrentPackage()
             saveLoadingScreenToCurrentTrip()
 
+            if (currentModeType == ModeType.QUALITY_FEEDBACK) {
+                val fileName = buildQualityFeedbackWordFileName()
+                val wordBytes = buildQualityFeedbackWordBytes()
+
+                val shareDir = File(cacheDir, "share")
+                if (!shareDir.exists()) {
+                    shareDir.mkdirs()
+                }
+
+                val file = File(shareDir, fileName)
+                file.writeBytes(wordBytes)
+
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "${packageName}.fileprovider",
+                    file
+                )
+
+                runOnUiThread {
+                    try {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = getWordMimeType()
+                            putExtra(Intent.EXTRA_SUBJECT, fileName)
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            clipData = ClipData.newRawUri(fileName, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+
+                        val chooserIntent = Intent.createChooser(shareIntent, "分享到")
+
+                        val resInfoList = packageManager.queryIntentActivities(
+                            chooserIntent,
+                            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                        )
+
+                        for (resolveInfo in resInfoList) {
+                            val targetPackageName = resolveInfo.activityInfo.packageName
+                            grantUriPermission(
+                                targetPackageName,
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+
+                        startActivity(chooserIntent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        toast("分享失败：${e.message ?: "未知错误"}")
+                    }
+                }
+                return@execute
+            }
+
+
             val fileName = when (currentModeType) {
-                ModeType.STANDARD -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_型号统计")
-                ModeType.FAST -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂统计")
-                ModeType.RETURN_LOADING -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
+                ModeType.STANDARD ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_型号统计")
+
+                ModeType.FAST ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂统计")
+
+                ModeType.RETURN_LOADING ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
+
+                ModeType.QUALITY_FEEDBACK ->
+                    ""
             }
 
             val excelBytes = when (currentModeType) {
-                ModeType.STANDARD -> buildStandardExcelBytes(currentProjectName)
-                ModeType.FAST -> buildFastExcelBytes(currentProjectName)
-                ModeType.RETURN_LOADING -> buildLoadingExcelBytes(currentProjectName)
+                ModeType.STANDARD ->
+                    buildStandardExcelBytes(currentProjectName)
+
+                ModeType.FAST ->
+                    buildFastExcelBytes(currentProjectName)
+
+                ModeType.RETURN_LOADING ->
+                    buildLoadingExcelBytes(currentProjectName)
+
+                ModeType.QUALITY_FEEDBACK ->
+                    ByteArray(0)
             }
 
             val uploadDir = File(cacheDir, "upload")
@@ -114,9 +188,17 @@ fun MainActivity.uploadCurrentModeProjectToServer() {
             activity.lifecycleScope.launch {
                 try {
                     val response = when (currentModeType) {
-                        ModeType.STANDARD -> RetrofitClient.api.uploadModelStatFile(multipartFile)
-                        ModeType.FAST -> RetrofitClient.api.uploadReturnStatFile(multipartFile)
-                        ModeType.RETURN_LOADING -> RetrofitClient.api.uploadReturnLoadFile(multipartFile)
+                        ModeType.STANDARD ->
+                            RetrofitClient.api.uploadModelStatFile(multipartFile)
+
+                        ModeType.FAST ->
+                            RetrofitClient.api.uploadReturnStatFile(multipartFile)
+
+                        ModeType.RETURN_LOADING ->
+                            RetrofitClient.api.uploadReturnLoadFile(multipartFile)
+
+                        ModeType.QUALITY_FEEDBACK ->
+                            return@launch
                     }
 
                     runOnUiThread {
@@ -141,3 +223,4 @@ fun MainActivity.uploadCurrentModeProjectToServer() {
         }
     }
 }
+

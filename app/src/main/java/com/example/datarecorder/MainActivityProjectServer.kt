@@ -18,6 +18,11 @@ import com.example.datarecorder.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
+
 
 private fun MainActivity.dp(value: Int): Int {
     return (value * resources.displayMetrics.density).toInt()
@@ -81,17 +86,21 @@ private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
         buildingLoadingContentMap.putIfAbsent(buildingName, "")
     }
 
-    // 当前楼栋切到服务器返回的第一个楼栋
+// 当前楼栋切到服务器返回的第一个楼栋
     currentBuildingName = finalBuildings.first()
     updateBuildingButtonText()
 
-    // 关键：切项目后不要再把旧屏幕数据保存回去
+// 关键：切项目后不要再把旧屏幕数据保存回去
     loadBuildingScopeToScreen(currentBuildingName, saveCurrentFirst = false)
+    ensureDefaultPackageExists()
+    ensureDefaultLoadingTripExists()
+    updatePackageButtonText()
 
-    // 把同步后的楼栋结构保存回数据库
+// 把默认第1包/第1车立即保存回数据库
     saveCurrentProjectContentNow()
 
     toast("已同步项目：$projectName")
+
 }
 
 
@@ -114,7 +123,7 @@ fun MainActivity.showCreateProjectDialog() {
     val listView = ListView(this)
 
     val emptyView = TextView(this).apply {
-        text = "请输入关键字后点击搜索"
+        text = "请输入关键字搜索项目名称"
         gravity = Gravity.CENTER
         textSize = 15f
         setTextColor(0xFF666666.toInt())
@@ -188,6 +197,9 @@ fun MainActivity.showCreateProjectDialog() {
     )
     listView.adapter = adapter
 
+    val searchHandler = Handler(Looper.getMainLooper())
+    var pendingSearchRunnable: Runnable? = null
+
     fun updateEmpty(text: String) {
         emptyView.text = text
         emptyView.visibility = View.VISIBLE
@@ -207,8 +219,8 @@ fun MainActivity.showCreateProjectDialog() {
                     val list: List<ServerProjectItem> = response.data ?: emptyList()
                     projectList.addAll(list)
                     displayList.addAll(
-                        list.map { item: ServerProjectItem ->
-                            item.projectName ?: "-"
+                        list.mapNotNull { item ->
+                            item.projectName?.trim()?.takeIf { it.isNotEmpty() }
                         }
                     )
                     adapter.notifyDataSetChanged()
@@ -228,14 +240,40 @@ fun MainActivity.showCreateProjectDialog() {
         }
     }
 
-    btnSearch.setOnClickListener {
+    fun triggerSearch(immediate: Boolean = false) {
+        pendingSearchRunnable?.let { searchHandler.removeCallbacks(it) }
+
         val keyword = inputKeyword.text.toString().trim()
-        loadProjects(keyword)
+
+        val task = Runnable {
+            loadProjects(keyword.ifBlank { null })
+        }
+
+        pendingSearchRunnable = task
+
+        if (immediate) {
+            task.run()
+        } else {
+            searchHandler.postDelayed(task, 300)
+        }
     }
 
+    btnSearch.setOnClickListener {
+        triggerSearch(immediate = true)
+    }
+
+    inputKeyword.addTextChangedListener(object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            triggerSearch(immediate = false)
+        }
+
+        override fun afterTextChanged(s: Editable?) = Unit
+    })
+
     inputKeyword.setOnEditorActionListener { _, _, _ ->
-        val keyword = inputKeyword.text.toString().trim()
-        loadProjects(keyword)
+        triggerSearch(immediate = true)
         true
     }
 
@@ -266,9 +304,11 @@ fun MainActivity.showCreateProjectDialog() {
     }
 
     dialog.setOnDismissListener {
+        pendingSearchRunnable?.let { searchHandler.removeCallbacks(it) }
         hideKeyboard(inputKeyword)
         refreshMainLayoutAfterKeyboard()
     }
 
     dialog.show()
 }
+

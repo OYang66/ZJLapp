@@ -536,6 +536,7 @@ fun MainActivity.insertExcelLogo(
         toRow = 2
     )
 }
+
 fun MainActivity.requestExportFolderAndExport() {
     if (currentProjectId <= 0) {
         toast("请先选择项目")
@@ -546,6 +547,19 @@ fun MainActivity.requestExportFolderAndExport() {
         try {
             saveScreenDataToCurrentPackage()
             saveLoadingScreenToCurrentTrip()
+
+            if (currentModeType == ModeType.QUALITY_FEEDBACK) {
+                val qualityFileName = buildQualityFeedbackWordFileName()
+                val qualityBytes = buildQualityFeedbackWordBytes()
+
+                pendingExportQualityFileName = qualityFileName
+                pendingExportQualityBytes = qualityBytes
+
+                runOnUiThread {
+                    exportFolderPickerLauncher.launch(getLastExportFolderUri())
+                }
+                return@execute
+            }
 
             val standardFileName =
                 buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
@@ -705,6 +719,35 @@ fun MainActivity.shareLoadingSummaryProject() {
 }
 
 fun MainActivity.exportCurrentProjectToSelectedFolder(treeUri: Uri) {
+    if (currentModeType == ModeType.QUALITY_FEEDBACK) {
+        val qualityFileName = pendingExportQualityFileName
+        val qualityBytes = pendingExportQualityBytes
+
+        if (qualityFileName == null || qualityBytes == null) {
+            toast("导出失败：没有可导出的数据")
+            clearPendingExportData()
+            return
+        }
+
+        ioExecutor.execute {
+            try {
+                writeBytesToTreeUri(treeUri, qualityFileName, qualityBytes)
+
+                runOnUiThread {
+                    toast("质量反馈已导出")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                runOnUiThread {
+                    toast("导出失败：${e.message ?: "未知错误"}")
+                }
+            } finally {
+                clearPendingExportData()
+            }
+        }
+        return
+    }
+
     val standardFileName = pendingExportStandardFileName
     val fastFileName = pendingExportFastFileName
     val loadingFileName = pendingExportLoadingFileName
@@ -740,14 +783,19 @@ fun MainActivity.exportCurrentProjectToSelectedFolder(treeUri: Uri) {
         }
     }
 }
+
 fun MainActivity.clearPendingExportData() {
     pendingExportStandardFileName = null
     pendingExportFastFileName = null
     pendingExportLoadingFileName = null
+    pendingExportQualityFileName = null
+
     pendingExportStandardBytes = null
     pendingExportFastBytes = null
     pendingExportLoadingBytes = null
+    pendingExportQualityBytes = null
 }
+
 
 
 fun MainActivity.writeBytesToTreeUri(treeUri: Uri, fileName: String, bytes: ByteArray) {
@@ -757,7 +805,13 @@ fun MainActivity.writeBytesToTreeUri(treeUri: Uri, fileName: String, bytes: Byte
     val existing = pickedDir.findFile(fileName)
     existing?.delete()
 
-    val targetFile = pickedDir.createFile(getExcelMimeType(fileName), fileName)
+    val mimeType = if (fileName.endsWith(".docx", true)) {
+        getWordMimeType()
+    } else {
+        getExcelMimeType(fileName)
+    }
+
+    val targetFile = pickedDir.createFile(mimeType, fileName)
         ?: throw Exception("无法创建导出文件：$fileName")
 
     contentResolver.openOutputStream(targetFile.uri)?.use { output ->
@@ -770,7 +824,6 @@ fun MainActivity.writeBytesToTreeUri(treeUri: Uri, fileName: String, bytes: Byte
  fun MainActivity.exportCurrentProject() {
     requestExportFolderAndExport()
 }
-
 fun MainActivity.shareCurrentModeProject() {
     if (currentProjectId <= 0) {
         toast("请先选择项目")
@@ -782,16 +835,88 @@ fun MainActivity.shareCurrentModeProject() {
             saveScreenDataToCurrentPackage()
             saveLoadingScreenToCurrentTrip()
 
+            if (currentModeType == ModeType.QUALITY_FEEDBACK) {
+                val fileName = buildQualityFeedbackWordFileName()
+                val wordBytes = buildQualityFeedbackWordBytes()
+
+                val shareDir = File(cacheDir, "share")
+                if (!shareDir.exists()) {
+                    shareDir.mkdirs()
+                }
+
+                val file = File(shareDir, fileName)
+                file.writeBytes(wordBytes)
+
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "${packageName}.fileprovider",
+                    file
+                )
+
+                runOnUiThread {
+                    try {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = getWordMimeType()
+                            putExtra(Intent.EXTRA_SUBJECT, fileName)
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            clipData = ClipData.newRawUri(fileName, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+
+                        val chooserIntent = Intent.createChooser(shareIntent, "分享到")
+
+                        val resInfoList = packageManager.queryIntentActivities(
+                            chooserIntent,
+                            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                        )
+
+                        for (resolveInfo in resInfoList) {
+                            val targetPackageName = resolveInfo.activityInfo.packageName
+                            grantUriPermission(
+                                targetPackageName,
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+
+                        startActivity(chooserIntent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        toast("分享失败：${e.message ?: "未知错误"}")
+                    }
+                }
+                return@execute
+            }
+
+
             val fileName = when (currentModeType) {
-                ModeType.FAST -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
-                ModeType.STANDARD -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
-                ModeType.RETURN_LOADING -> buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
+                ModeType.FAST ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameFast}")
+
+                ModeType.STANDARD ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_${modeNameStandard}")
+
+                ModeType.RETURN_LOADING ->
+                    buildExcelFileName("${currentProjectName}_${currentBuildingName}_返厂装车")
+
+                ModeType.QUALITY_FEEDBACK ->
+                    ""
             }
 
             val excelBytes = when (currentModeType) {
-                ModeType.FAST -> buildFastExcelBytes(currentProjectName)
-                ModeType.STANDARD -> buildStandardExcelBytes(currentProjectName)
-                ModeType.RETURN_LOADING -> buildLoadingExcelBytes(currentProjectName)
+                ModeType.FAST ->
+                    buildFastExcelBytes(currentProjectName)
+
+                ModeType.STANDARD ->
+                    buildStandardExcelBytes(currentProjectName)
+
+                ModeType.RETURN_LOADING ->
+                    buildLoadingExcelBytes(currentProjectName)
+
+                ModeType.QUALITY_FEEDBACK ->
+                    ByteArray(0)
             }
 
             val shareDir = File(cacheDir, "share")

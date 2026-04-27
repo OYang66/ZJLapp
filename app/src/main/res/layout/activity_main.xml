@@ -1390,6 +1390,484 @@
             </LinearLayout>
 
         </LinearLayout>
+        <!-- 质量反馈模式 -->
+        <LinearLayout
+            android:id="@+id/qualityModeContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="@drawable/bg_card_soft"
+            android:padding="10dp"
+            android:elevation="1dp">
+
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:background="@drawable/bg_card_soft"
+                android:padding="10dp"
+                android:elevation="1dp">
+
+                <!-- 第一行功能键 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="0.62"
+                    android:background="@drawable/bg_group"
+                    android:orientation="vertical"
+                    android:padding="4dp">
+
+                    <GridLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:columnCount="5"
+                        android:rowCount="1"
+                        android:useDefaultMargins="true">
+
+                        <Button
+                            android:id="@+id/btnQualityPlus"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="符号"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityMultiply"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="L"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityBrackets"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="Y"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualitySpace"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="空格"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityBackspace"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="回退"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+                    </GridLayout>
+
+                    <GridLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="3dp"
+                        android:columnCount="6"
+                        android:rowCount="1"
+                        android:useDefaultMargins="true">
+
+                        <Button
+                            android:id="@+id/btnQualityA"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="A"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityB"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="B"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityC"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="C"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityD"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="D"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityE"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="E"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityF"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_key"
+                            android:text="F"
+                            android:textAllCaps="false"
+                            android:textSize="11sp" />
+                    </GridLayout>
+                </LinearLayout>
+
+                <!-- 第二行：数字区 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1.52"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_group"
+                    android:orientation="horizontal"
+                    android:padding="4dp">
+
+                    <GridLayout
+                        android:id="@+id/layoutQualityNumbers"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:columnCount="3"
+                        android:rowCount="4"
+                        android:useDefaultMargins="true">
+
+                        <Button
+                            android:id="@+id/btnQuality7"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="7"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality8"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="8"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality9"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="9"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality4"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="4"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality5"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="5"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality6"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="6"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality1"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="1"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality2"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="2"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality3"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="3"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality0"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="0"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQuality00"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="00"
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btnQualityDot"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_rowWeight="1"
+                            android:background="@drawable/bg_keyboard_key_white"
+                            android:text="."
+                            android:textAllCaps="false"
+                            android:textColor="#2A2F3A"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+                    </GridLayout>
+
+                    <LinearLayout
+                        android:layout_width="82dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="4dp"
+                        android:orientation="vertical">
+
+                        <Button
+                            android:id="@+id/btnQualityNextRow"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_margin="1dp"
+                            android:background="@drawable/bg_keyboard_key_purple"
+                            android:text="换行"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btnQualityNextColumn"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_margin="1dp"
+                            android:background="@drawable/bg_keyboard_key_purple"
+                            android:text="换列"
+                            android:textAllCaps="false"
+                            android:textColor="#FFFFFF"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 第三行：四个分类区 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1.25"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="2dp"
+                            android:background="@drawable/bg_group"
+                            android:orientation="vertical"
+                            android:padding="4dp">
+
+                            <GridLayout
+                                android:id="@+id/layoutQualityWall"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:columnCount="3" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginStart="2dp"
+                            android:background="@drawable/bg_group"
+                            android:orientation="vertical"
+                            android:padding="4dp">
+
+                            <GridLayout
+                                android:id="@+id/layoutQualityBeam"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:columnCount="3" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="4dp"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="2dp"
+                            android:background="@drawable/bg_group"
+                            android:orientation="vertical"
+                            android:padding="4dp">
+
+                            <GridLayout
+                                android:id="@+id/layoutQualitySlab"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:columnCount="3" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginStart="2dp"
+                            android:background="@drawable/bg_group"
+                            android:orientation="vertical"
+                            android:padding="4dp">
+
+                            <GridLayout
+                                android:id="@+id/layoutQualityStair"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:columnCount="3" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+
+
+        </LinearLayout>
+
+
+
+
+
+
 
     </FrameLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
