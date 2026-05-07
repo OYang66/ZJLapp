@@ -44,6 +44,7 @@ fun MainActivity.goLogin(message: String) {
 
 fun MainActivity.checkAccountStatusNow() {
 	val username = SessionManager.getUsername(this)
+	if (isFinishing || isDestroyed) return
 	if (username.isBlank()) {
 		goLogin("登录状态已失效")
 		return

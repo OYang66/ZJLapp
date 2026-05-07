@@ -1,7 +1,5 @@
 package com.example.datarecorder.model
 
-data class AccountStatusResponse(
-    val valid: Boolean,
-    val reason: String,
-    val message: String
+data class AccountStatusRequest(
+		val username: String
 )

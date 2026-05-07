@@ -15,124 +15,127 @@ import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
 
-    private lateinit var etUsername: EditText
-    private lateinit var etPassword: EditText
-    private lateinit var btnLogin: Button
-    private lateinit var btnGoRegister: Button
-    private lateinit var btnViewTutorial: Button
-    private lateinit var cbRemember: CheckBox
+	private lateinit var etUsername: EditText
+	private lateinit var etPassword: EditText
+	private lateinit var btnLogin: Button
+	private lateinit var btnGoRegister: Button
+	private lateinit var btnViewTutorial: Button
+	private lateinit var cbRemember: CheckBox
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_login)
+	override fun onCreate(savedInstanceState: Bundle?) {
+		super.onCreate(savedInstanceState)
+		setContentView(R.layout.activity_login)
 
-        RetrofitClient.init(applicationContext)
+		RetrofitClient.init(applicationContext)
 
-        etUsername = findViewById(R.id.etUsername)
-        etPassword = findViewById(R.id.etPassword)
-        btnLogin = findViewById(R.id.btnLogin)
-        btnGoRegister = findViewById(R.id.btnGoRegister)
-        btnViewTutorial = findViewById(R.id.btnViewTutorial)
-        cbRemember = findViewById(R.id.cbRemember)
+		etUsername = findViewById(R.id.etUsername)
+		etPassword = findViewById(R.id.etPassword)
+		btnLogin = findViewById(R.id.btnLogin)
+		btnGoRegister = findViewById(R.id.btnGoRegister)
+		btnViewTutorial = findViewById(R.id.btnViewTutorial)
+		cbRemember = findViewById(R.id.cbRemember)
 
-        if (SessionManager.isRememberEnabled(this)) {
-            cbRemember.isChecked = true
-            etUsername.setText(SessionManager.getSavedUsername(this))
-            etPassword.setText(SessionManager.getSavedPassword(this))
-        }
+		if (SessionManager.isRememberEnabled(this)) {
+			cbRemember.isChecked = true
+			etUsername.setText(SessionManager.getSavedUsername(this))
+			etPassword.setText(SessionManager.getSavedPassword(this))
+		}
 
-        val logoutReason = SessionManager.consumeLogoutReason(this)
-        if (logoutReason.isNotBlank()) {
-            Toast.makeText(this, logoutReason, Toast.LENGTH_LONG).show()
-        }
+		val logoutReason = SessionManager.consumeLogoutReason(this)
+		if (logoutReason.isNotBlank()) {
+			Toast.makeText(this, logoutReason, Toast.LENGTH_LONG).show()
+		}
 
-        btnLogin.setOnClickListener {
-            doLogin()
-        }
+		btnLogin.setOnClickListener {
+			doLogin()
+		}
 
-        btnGoRegister.setOnClickListener {
-            startActivity(Intent(this, RegisterActivity::class.java))
-            finish()
-        }
+		btnGoRegister.setOnClickListener {
+			startActivity(Intent(this, RegisterActivity::class.java))
+			finish()
+		}
 
-        btnViewTutorial.setOnClickListener {
-            openTutorial()
-        }
-    }
+		btnViewTutorial.setOnClickListener {
+			openTutorial()
+		}
+	}
 
-    private fun doLogin() {
-        val username = etUsername.text.toString().trim()
-        val password = etPassword.text.toString().trim()
+	private fun doLogin() {
+		val username = etUsername.text.toString().trim()
+		val password = etPassword.text.toString().trim()
 
-        if (username.isEmpty()) {
-            Toast.makeText(this, "请输入用户名", Toast.LENGTH_SHORT).show()
-            return
-        }
+		if (username.isEmpty()) {
+			Toast.makeText(this, "请输入用户名", Toast.LENGTH_SHORT).show()
+			return
+		}
 
-        if (password.isEmpty()) {
-            Toast.makeText(this, "请输入密码", Toast.LENGTH_SHORT).show()
-            return
-        }
+		if (password.isEmpty()) {
+			Toast.makeText(this, "请输入密码", Toast.LENGTH_SHORT).show()
+			return
+		}
 
-        lifecycleScope.launch {
-            try {
-                val response = RetrofitClient.api.login(
-                    LoginRequest(
-                        username = username,
-                        password = password
-                    )
-                )
+		lifecycleScope.launch {
+			try {
+				val response = RetrofitClient.api.login(
+					LoginRequest(
+						username = username,
+						password = password
+					)
+				)
 
-                if (response.code == 200 && response.data != null) {
-                    val data = response.data
+				if (response.code == 200 && response.data != null) {
+					val data = response.data
 
-                    SessionManager.saveLogin(
-                        this@LoginActivity,
-                        data.token,
-                        data.username,
-                        data.userId
-                    )
+					SessionManager.saveLogin(
+						this@LoginActivity,
+						data.token,
+						data.username,
+						data.userId
+					)
 
-                    if (cbRemember.isChecked) {
-                        SessionManager.saveRememberedAccount(
-                            this@LoginActivity,
-                            username,
-                            password
-                        )
-                    } else {
-                        SessionManager.clearRememberedAccount(this@LoginActivity)
-                    }
+					if (cbRemember.isChecked) {
+						SessionManager.saveRememberedAccount(
+							this@LoginActivity,
+							username,
+							password
+						)
+					} else {
+						SessionManager.clearRememberedAccount(this@LoginActivity)
+					}
 
-                    AccountStatusScheduler.start(this@LoginActivity)
+					AccountStatusScheduler.start(this@LoginActivity)
 
-                    Toast.makeText(
-                        this@LoginActivity,
-                        response.message?.ifBlank { "登录成功" } ?: "登录成功",
-                        Toast.LENGTH_SHORT
-                    ).show()
+					Toast.makeText(
+						this@LoginActivity,
+						response.message?.ifBlank { "登录成功" } ?: "登录成功",
+						Toast.LENGTH_SHORT
+					).show()
 
-                    startActivity(Intent(this@LoginActivity, MainActivity::class.java))
-                    finish()
-                } else {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        response.message?.ifBlank { "登录失败" } ?: "登录失败",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@LoginActivity,
-                    "网络异常：" + (e.message ?: "请稍后重试"),
-                    Toast.LENGTH_LONG
-                ).show()
-                e.printStackTrace()
-            }
-        }
-    }
 
-    private fun openTutorial() {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
-        startActivity(intent)
-    }
+
+					startActivity(Intent(this@LoginActivity, MainActivity::class.java))
+
+					finish()
+				} else {
+					Toast.makeText(
+						this@LoginActivity,
+						response.message?.ifBlank { "登录失败" } ?: "登录失败",
+						Toast.LENGTH_SHORT
+					).show()
+				}
+			} catch (e: Exception) {
+				Toast.makeText(
+					this@LoginActivity,
+					"网络异常：" + (e.message ?: "请稍后重试"),
+					Toast.LENGTH_LONG
+				).show()
+				e.printStackTrace()
+			}
+		}
+	}
+
+	private fun openTutorial() {
+		val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
+		startActivity(intent)
+	}
 }

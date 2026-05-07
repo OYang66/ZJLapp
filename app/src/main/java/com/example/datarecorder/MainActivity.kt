@@ -31,6 +31,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.example.datarecorder.model.AccountStatusRequest
 import com.example.datarecorder.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+
 
 data class BackupItem(
 		val id: Long? = null,
@@ -283,7 +285,7 @@ class MainActivity : AppCompatActivity() {
 	val fastModelKeys = listOf("E", "F", "SP")
 
 	val allowedInstallNoTokens = setOf(
-		"A", "B", "C", "D", "E", "F", "G",
+		"A", "B", "C", "D", "E", "F", "G", "K",
 		"W", "S", "DM", "LT", "P",
 		"-", "/"
 	)
@@ -360,6 +362,45 @@ class MainActivity : AppCompatActivity() {
 	override fun onResume() {
 		super.onResume()
 		appUpdateManager.onHostResume()
+		checkAccountStatusOnOpen()
+	}
+
+	private fun checkAccountStatusOnOpen() {
+		val username = SessionManager.getUsername(this)
+		if (username.isBlank()) {
+			forceLogoutToLogin("登录状态已失效")
+			return
+		}
+
+		lifecycleScope.launch {
+			try {
+				val response = RetrofitClient.api.checkAccountStatus(
+					AccountStatusRequest(username = username)
+				)
+
+				val data = response.data
+				if (response.code == 200 && data != null) {
+					if (!data.valid) {
+						forceLogoutToLogin(
+							data.message.ifBlank { "账号已停用或状态异常，已退出登录" }
+						)
+					}
+				}
+			} catch (_: Exception) {
+				// 网络异常时不强制退出，避免误踢
+			}
+		}
+	}
+
+	private fun forceLogoutToLogin(message: String) {
+		SessionManager.saveLogoutReason(this, message)
+		SessionManager.clearLogin(this)
+		AccountStatusScheduler.stop(this)
+
+		val intent = Intent(this, LoginActivity::class.java)
+		intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+		startActivity(intent)
+		finish()
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -390,7 +431,11 @@ class MainActivity : AppCompatActivity() {
 		updatePackageButtonText()
 		initQualityModeArea()
 		initQualityInputButtons()
+		registerLogoutReceiver()
 
+		checkAccountStatusNow()
+
+		AccountStatusScheduler.start(this)
 
 		currentModeType = readLastModeType()
 		isFastMode = currentModeType == ModeType.FAST
@@ -411,23 +456,42 @@ class MainActivity : AppCompatActivity() {
 	}
 
 	override fun onDestroy() {
-		autoSaveRunnable?.let { handler.removeCallbacks(it) }
-		historyBackupRunnable?.let { handler.removeCallbacks(it) }
 
-		runCatching {
-			kotlinx.coroutines.runBlocking {
-				saveCurrentProjectContentNow()
+		autoSaveRunnable?.let {
+			handler.removeCallbacks(it)
+		}
+
+		historyBackupRunnable?.let {
+			handler.removeCallbacks(it)
+		}
+
+		try {
+
+			ioExecutor.execute {
+
+				try {
+
+					kotlinx.coroutines.runBlocking {
+						saveCurrentProjectContentNow()
+					}
+
+				} catch (_: Exception) {
+				}
 			}
+
+		} catch (_: Exception) {
 		}
 
 		saveHistoryBackupSnapshot()
 
-		ioExecutor.shutdownNow()
-		appUpdateManager.release()
 		unregisterLogoutReceiverSafe()
+
+		appUpdateManager.release()
+
+		ioExecutor.shutdown()
+
 		super.onDestroy()
 	}
-
 
 	override fun onPause() {
 		runCatching {
@@ -729,7 +793,7 @@ class MainActivity : AppCompatActivity() {
 		packageDateMap[packageName] = getTodayPackageDate()
 
 		loadPackageToScreen(packageName)
-		triggerAutoSave()
+		triggerAutoSaveDebounced()
 	}
 
 
@@ -758,7 +822,7 @@ class MainActivity : AppCompatActivity() {
 
 
 		btnMultiply.setOnClickListener {
-			appendStandardToLastField("L")
+			appendStandardToLastField("K")
 		}
 
 		btnBrackets.setOnClickListener {
@@ -1067,7 +1131,7 @@ class MainActivity : AppCompatActivity() {
 				}
 
 				updateDisplayTable()
-				triggerAutoSave()
+				triggerAutoSaveDebounced()
 			}
 			.setNegativeButton("取消", null)
 			.show()
@@ -1097,7 +1161,7 @@ class MainActivity : AppCompatActivity() {
 				}
 
 				updateDisplayTable()
-				triggerAutoSave()
+				triggerAutoSaveDebounced()
 			}
 			.setNegativeButton("取消", null)
 			.show()
@@ -1513,10 +1577,28 @@ class MainActivity : AppCompatActivity() {
 	}
 
 
-	fun triggerAutoSave() {
-		autoSaveRunnable?.let { handler.removeCallbacks(it) }
-		autoSaveRunnable = Runnable { saveCurrentProjectContent() }
-		handler.postDelayed(autoSaveRunnable!!, 250)
+	fun triggerAutoSaveDebounced() {
+
+		autoSaveRunnable?.let {
+			handler.removeCallbacks(it)
+		}
+
+		autoSaveRunnable = Runnable {
+
+			ioExecutor.execute {
+
+				try {
+
+					kotlinx.coroutines.runBlocking {
+						saveCurrentProjectContentNow()
+					}
+
+				} catch (_: Exception) {
+				}
+			}
+		}
+
+		handler.postDelayed(autoSaveRunnable!!, 500)
 	}
 
 	fun MainActivity.saveCurrentProjectContent() {
