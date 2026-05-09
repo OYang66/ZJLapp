@@ -20,14 +20,20 @@ import java.io.File
 // =========================
 // 历史数据备份
 // =========================
-fun MainActivity.buildHistoryBackupJson(): String {
+fun MainActivity.buildHistoryBackupJson(
+		standardContent: String,
+		fastContent: String,
+		loadingContent: String,
+		qualityContent: String
+): String {
 	val json = JSONObject()
 	json.put("projectId", currentProjectId)
 	json.put("projectName", currentProjectName)
 	json.put("savedAt", System.currentTimeMillis())
-	json.put("standardContent", serializeStandardContent())
-	json.put("fastContent", serializeFastContent())
-	json.put("loadingContent", serializeLoadingContent())
+	json.put("standardContent", standardContent)
+	json.put("fastContent", fastContent)
+	json.put("loadingContent", loadingContent)
+	json.put("qualityContent", qualityContent)
 	json.put("currentModeType", currentModeType.name)
 	json.put("isFastMode", isFastMode)
 	return json.toString()
@@ -37,22 +43,28 @@ fun MainActivity.buildHistoryBackupJson(): String {
 fun MainActivity.saveHistoryBackupSnapshot() {
 	if (currentProjectId <= 0L) return
 
+	snapshotCurrentProjectState()
 	val standardContent = serializeStandardContent()
 	val fastContent = serializeFastContent()
 	val loadingContent = serializeLoadingContent()
-
+	val qualityContent = serializeQualityFeedbackContent()
 
 	if (
 		standardContent.isBlank() &&
 		fastContent.isBlank() &&
-		loadingContent.isBlank()
-
+		loadingContent.isBlank() &&
+		qualityContent.isBlank()
 	) return
 
 	lifecycleScope.launch(Dispatchers.IO) {
 		try {
 			val fileName = buildHistoryBackupFileName(currentProjectName)
-			val bytes = buildHistoryBackupJson().toByteArray(Charsets.UTF_8)
+			val bytes = buildHistoryBackupJson(
+				standardContent = standardContent,
+				fastContent = fastContent,
+				loadingContent = loadingContent,
+				qualityContent = qualityContent
+			).toByteArray(Charsets.UTF_8)
 
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 				writeHistoryBackupByMediaStore(fileName, bytes)
@@ -103,7 +115,7 @@ fun MainActivity.restoreHistoryBackup(item: BackupItem) {
 				deserializePackageStandardContent(standardContent)
 				deserializePackageFastContent(fastContent)
 				deserializeLoadingContent(loadingContent)
-
+				deserializeQualityFeedbackContent(qualityContent)
 
 				val allNames = linkedSetOf<String>()
 				allNames.addAll(packageStandardRowsMap.keys)

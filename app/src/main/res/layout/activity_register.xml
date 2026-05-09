@@ -105,7 +105,7 @@
                 android:background="@drawable/bg_auth_button_outline"
                 android:text="查看教程"
                 android:textAllCaps="false"
-                android:textColor="#6C56B3"
+                android:textColor="#FFFFFF"
                 android:textSize="15sp" />
         </LinearLayout>
     </LinearLayout>

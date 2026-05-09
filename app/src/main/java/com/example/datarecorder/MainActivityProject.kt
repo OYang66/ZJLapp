@@ -466,17 +466,14 @@ fun MainActivity.parseBuildingScopedContent(
 
 
 fun MainActivity.serializeProjectStandardBuildingsContent(): String {
-	saveCurrentBuildingScopeToMemory()
 	return wrapBuildingScopedContent(currentBuildingName, buildingStandardContentMap)
 }
 
 fun MainActivity.serializeProjectFastBuildingsContent(): String {
-	saveCurrentBuildingScopeToMemory()
 	return wrapBuildingScopedContent(currentBuildingName, buildingFastContentMap)
 }
 
 fun MainActivity.serializeProjectLoadingBuildingsContent(): String {
-	saveCurrentBuildingScopeToMemory()
 	return wrapBuildingScopedContent(currentBuildingName, buildingLoadingContentMap)
 }
 

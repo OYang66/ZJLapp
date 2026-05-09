@@ -12,8 +12,8 @@ android {
 		applicationId = "com.example.datarecorder"
 		minSdk = 26
 		targetSdk = 34
-		versionCode = 24
-		versionName = "2.5.0"
+		versionCode = 25
+		versionName = "2.5.1"
 	}
 
 	buildFeatures {
@@ -54,16 +54,12 @@ dependencies {
 	implementation("androidx.datastore:datastore-preferences:1.1.1")
 	implementation("com.google.code.gson:gson:2.10.1")
 	implementation("androidx.work:work-runtime-ktx:2.9.0")
-
 	implementation("com.squareup.okhttp3:okhttp:4.12.0")
-	implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
 	implementation("org.apache.poi:poi-ooxml:5.2.5")
 	implementation("org.apache.commons:commons-compress:1.26.1")
 	implementation("commons-io:commons-io:2.15.1")
 	implementation("com.github.virtuald:curvesapi:1.08")
-	implementation("org.apache.poi:poi-ooxml:5.2.5")
 
 }
 

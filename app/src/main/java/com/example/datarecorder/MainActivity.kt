@@ -31,7 +31,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.example.datarecorder.model.AccountStatusRequest
 import com.example.datarecorder.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -362,45 +361,7 @@ class MainActivity : AppCompatActivity() {
 	override fun onResume() {
 		super.onResume()
 		appUpdateManager.onHostResume()
-		checkAccountStatusOnOpen()
-	}
-
-	private fun checkAccountStatusOnOpen() {
-		val username = SessionManager.getUsername(this)
-		if (username.isBlank()) {
-			forceLogoutToLogin("登录状态已失效")
-			return
-		}
-
-		lifecycleScope.launch {
-			try {
-				val response = RetrofitClient.api.checkAccountStatus(
-					AccountStatusRequest(username = username)
-				)
-
-				val data = response.data
-				if (response.code == 200 && data != null) {
-					if (!data.valid) {
-						forceLogoutToLogin(
-							data.message.ifBlank { "账号已停用或状态异常，已退出登录" }
-						)
-					}
-				}
-			} catch (_: Exception) {
-				// 网络异常时不强制退出，避免误踢
-			}
-		}
-	}
-
-	private fun forceLogoutToLogin(message: String) {
-		SessionManager.saveLogoutReason(this, message)
-		SessionManager.clearLogin(this)
-		AccountStatusScheduler.stop(this)
-
-		val intent = Intent(this, LoginActivity::class.java)
-		intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-		startActivity(intent)
-		finish()
+		checkAccountStatusNow()
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -432,9 +393,7 @@ class MainActivity : AppCompatActivity() {
 		initQualityModeArea()
 		initQualityInputButtons()
 		registerLogoutReceiver()
-
 		checkAccountStatusNow()
-
 		AccountStatusScheduler.start(this)
 
 		currentModeType = readLastModeType()
@@ -451,8 +410,6 @@ class MainActivity : AppCompatActivity() {
 										 appUpdateManager.checkUpdate(false)
 									 }, 1000)
 
-		registerLogoutReceiver()
-		checkAccountStatusNow()
 	}
 
 	override fun onDestroy() {
@@ -465,21 +422,8 @@ class MainActivity : AppCompatActivity() {
 			handler.removeCallbacks(it)
 		}
 
-		try {
-
-			ioExecutor.execute {
-
-				try {
-
-					kotlinx.coroutines.runBlocking {
-						saveCurrentProjectContentNow()
-					}
-
-				} catch (_: Exception) {
-				}
-			}
-
-		} catch (_: Exception) {
+		runCatching {
+			saveCurrentProjectContent()
 		}
 
 		saveHistoryBackupSnapshot()
@@ -495,9 +439,7 @@ class MainActivity : AppCompatActivity() {
 
 	override fun onPause() {
 		runCatching {
-			kotlinx.coroutines.runBlocking {
-				saveCurrentProjectContentNow()
-			}
+			saveCurrentProjectContent()
 		}
 		saveHistoryBackupSnapshot()
 		super.onPause()
@@ -1559,11 +1501,15 @@ class MainActivity : AppCompatActivity() {
 	}
 
 
+	fun MainActivity.snapshotCurrentProjectState() {
+		saveCurrentPackageToMemoryForSave()
+		saveCurrentBuildingScopeToMemory()
+	}
+
 	suspend fun MainActivity.saveCurrentProjectContentNow() {
 		if (currentProjectId <= 0L) return
 
-		saveCurrentPackageToMemoryForSave()
-		saveLoadingScreenToCurrentTrip()
+		snapshotCurrentProjectState()
 
 		repository.updateProject(
 			id = currentProjectId,
@@ -1584,21 +1530,10 @@ class MainActivity : AppCompatActivity() {
 		}
 
 		autoSaveRunnable = Runnable {
-
-			ioExecutor.execute {
-
-				try {
-
-					kotlinx.coroutines.runBlocking {
-						saveCurrentProjectContentNow()
-					}
-
-				} catch (_: Exception) {
-				}
-			}
+			saveCurrentProjectContent()
 		}
 
-		handler.postDelayed(autoSaveRunnable!!, 500)
+		handler.postDelayed(autoSaveRunnable!!, 1500)
 	}
 
 	fun MainActivity.saveCurrentProjectContent() {

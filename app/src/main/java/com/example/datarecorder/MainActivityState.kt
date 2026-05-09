@@ -276,7 +276,6 @@ fun MainActivity.ensureDefaultPackageExists() {
 }
 
 fun MainActivity.serializeProjectQualityBuildingsContent(): String {
-	saveCurrentBuildingScopeToMemory()
 	return wrapBuildingScopedContent(currentBuildingName, buildingQualityContentMap)
 }
 
