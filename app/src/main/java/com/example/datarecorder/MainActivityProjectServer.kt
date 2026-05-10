@@ -178,11 +178,29 @@ fun MainActivity.showCreateProjectDialog() {
         }
     )
 
-    val dialog = AlertDialog.Builder(this)
-        .setTitle("新建项目")
-        .setView(container)
-        .setNegativeButton("取消", null)
-        .create()
+    val dialog = createCardDialog(
+        title = "新建项目",
+        subtitle = "搜索服务器项目并同步到本地"
+    ) { dlg ->
+        addView(
+            container,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        addView(
+            createDialogActionButton("关闭", primary = false) {
+                dlg.dismiss()
+            },
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(42)
+            ).apply {
+                topMargin = dp(16)
+            }
+        )
+    }
 
     val displayList = mutableListOf<String>()
     val projectList = mutableListOf<ServerProjectItem>()

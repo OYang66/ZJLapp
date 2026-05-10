@@ -729,17 +729,7 @@ fun MainActivity.selectStandardSavedCell(rowIndex: Int, field: StandardField) {
 private fun MainActivity.showStandardRowDeleteOptions(savedRowIndex: Int?, isCurrentRow: Boolean) {
 	if (savedRowIndex == null && (!isCurrentRow || currentStandardRow.isEmpty())) return
 
-	val options = arrayOf("删除该行")
-
-	AlertDialog.Builder(this)
-		.setTitle("操作")
-		.setItems(options) { _, which ->
-			if (which == 0) {
-				confirmDeleteStandardRow(savedRowIndex, isCurrentRow)
-			}
-		}
-		.setNegativeButton("取消", null)
-		.show()
+	confirmDeleteStandardRow(savedRowIndex, isCurrentRow)
 }
 
 

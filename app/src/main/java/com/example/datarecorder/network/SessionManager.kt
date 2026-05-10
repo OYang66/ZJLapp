@@ -9,6 +9,8 @@ object SessionManager {
     private const val KEY_USERNAME = "username"
     private const val KEY_USER_ID = "user_id"
     private const val KEY_LOGOUT_REASON = "logout_reason"
+    private const val KEY_ONLINE_STATUS = "online_status"
+    private const val KEY_LAST_ACTIVE_TIME = "last_active_time"
 
     private const val KEY_REMEMBER = "remember_account_password"
     private const val KEY_SAVED_USERNAME = "saved_username"
@@ -51,11 +53,28 @@ object SessionManager {
         return value
     }
 
+    fun saveOnlineState(context: Context, onlineStatus: String?, lastActiveTime: String?) {
+        prefs(context).edit()
+            .putString(KEY_ONLINE_STATUS, onlineStatus ?: "")
+            .putString(KEY_LAST_ACTIVE_TIME, lastActiveTime ?: "")
+            .apply()
+    }
+
+    fun getOnlineStatus(context: Context): String {
+        return prefs(context).getString(KEY_ONLINE_STATUS, "") ?: ""
+    }
+
+    fun getLastActiveTime(context: Context): String {
+        return prefs(context).getString(KEY_LAST_ACTIVE_TIME, "") ?: ""
+    }
+
     fun clearLogin(context: Context) {
         prefs(context).edit()
             .remove(KEY_TOKEN)
             .remove(KEY_USERNAME)
             .remove(KEY_USER_ID)
+            .remove(KEY_ONLINE_STATUS)
+            .remove(KEY_LAST_ACTIVE_TIME)
             .apply()
     }
 

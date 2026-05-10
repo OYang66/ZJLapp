@@ -58,6 +58,11 @@ fun MainActivity.checkAccountStatusNow() {
 
 			val data = response.data
 			if (response.code == 200 && data != null) {
+				SessionManager.saveOnlineState(
+					this@checkAccountStatusNow,
+					data.onlineStatus,
+					data.lastActiveTime
+				)
 				if (!data.valid) {
 					ForceLogoutHelper.logout(
 						this@checkAccountStatusNow,

@@ -121,6 +121,11 @@ class AppUpdateManager(private val activity: Activity) {
     }
 
     private fun showUpdateDialog(info: AppVersionInfo) {
+        val title = if (info.updateTitle.isNullOrBlank()) {
+            "发现新版本"
+        } else {
+            info.updateTitle
+        }
         val message = buildString {
             append("最新版本：${info.versionName}\n\n")
             append(
@@ -131,29 +136,131 @@ class AppUpdateManager(private val activity: Activity) {
                 }
             )
         }
+        val canSkip = info.forceUpdate != 1
 
-        val dialog = AlertDialog.Builder(activity)
-            .setTitle(
-                if (info.updateTitle.isNullOrBlank()) {
-                    "发现新版本"
-                } else {
-                    info.updateTitle
+        fun createActionButton(text: String, primary: Boolean, onClick: () -> Unit): TextView {
+            return TextView(activity).apply {
+                this.text = text
+                gravity = Gravity.CENTER
+                textSize = 14f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(if (primary) Color.WHITE else 0xFF6C56B3.toInt())
+                minHeight = dp(42)
+                setPadding(dp(12), 0, dp(12), 0)
+                background = activity.getDrawable(
+                    if (primary) R.drawable.bg_auth_button_primary else R.drawable.bg_auth_button_outline
+                )
+                setOnClickListener { onClick() }
+            }
+        }
+
+        val dialog = Dialog(activity).apply {
+            setCancelable(canSkip)
+        }
+
+        val root = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFFF5F7FB.toInt())
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+        }
+
+        val card = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = activity.getDrawable(R.drawable.bg_card_soft)
+        }
+
+        val titleView = TextView(activity).apply {
+            text = title
+            textSize = 19f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFF222222.toInt())
+        }
+
+        val subtitleView = TextView(activity).apply {
+            text = if (canSkip) "检测到可安装的新版本" else "当前版本需要强制更新后继续使用"
+            textSize = 12f
+            setTextColor(0xFF8A7AB8.toInt())
+            setPadding(0, dp(4), 0, 0)
+        }
+
+        val messageView = TextView(activity).apply {
+            text = message
+            textSize = 14f
+            setTextColor(0xFF2F2A3D.toInt())
+            setLineSpacing(dpF(3f), 1f)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(0xFFF8F5FF.toInt())
+                setStroke(dp(1), 0xFFE4DAFF.toInt())
+                cornerRadius = dpF(12f)
+            }
+        }
+
+        val actionRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            if (canSkip) {
+                addView(
+                    createActionButton("暂不更新", primary = false) {
+                        dialog.dismiss()
+                    },
+                    LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+                        marginEnd = dp(6)
+                    }
+                )
+            }
+            addView(
+                createActionButton("立即更新", primary = true) {
+                    dialog.dismiss()
+                    startUpdate(info)
+                },
+                LinearLayout.LayoutParams(0, dp(42), if (canSkip) 1f else 0f).apply {
+                    if (canSkip) {
+                        marginStart = dp(6)
+                    } else {
+                        width = LinearLayout.LayoutParams.MATCH_PARENT
+                    }
                 }
             )
-            .setMessage(message)
-            .setCancelable(info.forceUpdate != 1)
-            .setPositiveButton("立即更新") { _, _ ->
-                startUpdate(info)
-            }
-            .apply {
-                if (info.forceUpdate != 1) {
-                    setNegativeButton("暂不更新", null)
-                }
+        }
 
+        card.addView(titleView)
+        card.addView(subtitleView)
+        card.addView(
+            messageView,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(16)
             }
-            .create()
+        )
+        card.addView(
+            actionRow,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(16)
+            }
+        )
 
+        root.addView(
+            card,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        dialog.setContentView(root)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+        dialog.window?.setLayout(
+            (activity.resources.displayMetrics.widthPixels * 0.9f).toInt(),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
     }
 
     private fun startUpdate(info: AppVersionInfo) {

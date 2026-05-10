@@ -92,6 +92,7 @@ class LoginActivity : AppCompatActivity() {
 						data.username,
 						data.userId
 					)
+					SessionManager.saveOnlineState(this@LoginActivity, "1", "")
 
 					if (cbRemember.isChecked) {
 						SessionManager.saveRememberedAccount(

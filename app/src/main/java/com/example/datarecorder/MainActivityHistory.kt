@@ -184,65 +184,65 @@ fun MainActivity.showHistoryBackupDialog() {
 				return@withContext
 			}
 
-			val scrollView = ScrollView(this@showHistoryBackupDialog)
+			lateinit var dialog: android.app.Dialog
 			val container = LinearLayout(this@showHistoryBackupDialog).apply {
 				orientation = LinearLayout.VERTICAL
-				setPadding(dp(8), dp(8), dp(8), dp(8))
 			}
-			scrollView.addView(container)
 
-			val dialog = AlertDialog.Builder(this@showHistoryBackupDialog)
-				.setTitle("历史数据")
-				.setView(scrollView)
-				.setNegativeButton("关闭", null)
-				.create()
-
-			backups.forEach { item ->
-				val row = LinearLayout(this@showHistoryBackupDialog).apply {
+			backups.forEachIndexed { index, item ->
+				lateinit var rowView: LinearLayout
+				val actionView = LinearLayout(this@showHistoryBackupDialog).apply {
 					orientation = LinearLayout.HORIZONTAL
-					gravity = Gravity.CENTER_VERTICAL
-					setPadding(dp(6), dp(8), dp(6), dp(8))
-				}
-
-				val fileNameView = TextView(this@showHistoryBackupDialog).apply {
-					text = item.fileName
-					textSize = 14f
-					setTextColor(0xFF222222.toInt())
-					layoutParams = LinearLayout.LayoutParams(
-						0,
-						LinearLayout.LayoutParams.WRAP_CONTENT,
-						1f
-					)
-				}
-
-				val restoreBtn = Button(this@showHistoryBackupDialog).apply {
-					text = "恢复"
-					textSize = 12f
-					isAllCaps = false
-					setOnClickListener {
+					addView(createDialogActionButton("恢复", primary = false) {
 						confirmRestoreHistoryBackup(item)
-					}
-				}
-
-				val deleteBtn = Button(this@showHistoryBackupDialog).apply {
-					text = "删除"
-					textSize = 12f
-					isAllCaps = false
-					setOnClickListener {
+					}, LinearLayout.LayoutParams(dp(66), dp(36)).apply {
+						marginEnd = dp(6)
+					})
+					addView(createDialogActionButton("删除", primary = false) {
 						confirmDeleteHistoryBackup(item) {
-							container.removeView(row)
+							container.removeView(rowView)
 							if (container.childCount == 0) {
 								dialog.dismiss()
 								toast("暂无历史数据")
 							}
 						}
-					}
+					}, LinearLayout.LayoutParams(dp(66), dp(36)))
 				}
 
-				row.addView(fileNameView)
-				row.addView(restoreBtn)
-				row.addView(deleteBtn)
-				container.addView(row)
+				rowView = createDialogListItem(
+					label = item.fileName,
+					subtitle = java.text.SimpleDateFormat(
+						"yyyy-MM-dd HH:mm:ss",
+						java.util.Locale.getDefault()
+					).format(java.util.Date(item.timeMillis)),
+					accent = index == 0,
+					trailingView = actionView
+				)
+
+				container.addView(rowView, LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					if (index > 0) topMargin = dp(8)
+				})
+			}
+
+			dialog = createCardDialog(
+				title = "历史数据",
+				subtitle = "可恢复或删除最近的自动备份"
+			) { dlg ->
+				addView(wrapDialogScroll(container))
+				addView(
+					createDialogActionButton("关闭", primary = false) {
+						dlg.dismiss()
+					},
+					LinearLayout.LayoutParams(
+						LinearLayout.LayoutParams.MATCH_PARENT,
+						dp(42)
+					).apply {
+						topMargin = dp(16)
+					}
+				)
 			}
 
 			dialog.show()
@@ -354,24 +354,24 @@ fun MainActivity.deleteHistoryBackup(item: BackupItem): Boolean {
 
 
 fun MainActivity.confirmDeleteHistoryBackup(item: BackupItem, onDeleted: () -> Unit) {
-	AlertDialog.Builder(this)
-		.setTitle("确认删除")
-		.setMessage("是否删除该历史备份？\n删除后无法恢复。")
-		.setNegativeButton("取消", null)
-		.setPositiveButton("删除") { _, _ ->
-			lifecycleScope.launch(Dispatchers.IO) {
-				val success = deleteHistoryBackup(item)
-				withContext(Dispatchers.Main) {
-					if (success) {
-						onDeleted()
-						toast("备份已删除")
-					} else {
-						toast("删除失败")
-					}
+	showConfirmCardDialog(
+		title = "确认删除",
+		message = "是否删除该历史备份？\n删除后无法恢复。",
+		confirmText = "删除",
+		dangerMessage = true
+	) {
+		lifecycleScope.launch(Dispatchers.IO) {
+			val success = deleteHistoryBackup(item)
+			withContext(Dispatchers.Main) {
+				if (success) {
+					onDeleted()
+					toast("备份已删除")
+				} else {
+					toast("删除失败")
 				}
 			}
 		}
-		.show()
+	}
 }
 
 

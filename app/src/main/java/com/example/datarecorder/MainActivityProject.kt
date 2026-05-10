@@ -4,7 +4,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -56,53 +55,58 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
 		return
 	}
 
-
-	val popup = PopupMenu(this, anchor)
-	var order = 0
-
 	if (currentModeType == ModeType.RETURN_LOADING) {
-		loadingTripMap.keys.forEachIndexed { index, tripName ->
-			popup.menu.add(0, 1000 + index, order++, tripName)
-		}
-		popup.menu.add(0, 1, order++, "增加车次")
-		popup.menu.add(0, 2, order, "删除当前车次")
-	} else {
-		getAllPackageNamesInOrder().forEachIndexed { index, packageName ->
-			popup.menu.add(0, 1000 + index, order++, packageName)
-		}
-		popup.menu.add(0, 1, order++, "增加包号")
-		popup.menu.add(0, 2, order, "删除当前包号")
+		showMenuCardPopup(
+			anchor = anchor,
+			title = "车次管理",
+			subtitle = currentLoadingTripName.ifBlank { "请选择或新增车次" },
+			sections = listOf(
+				MenuCardSection(
+					title = "当前车次",
+					items = loadingTripMap.keys.map { tripName ->
+						MenuCardItem(
+							label = tripName,
+							onClick = { switchLoadingTrip(tripName) },
+							selected = tripName == currentLoadingTripName
+						)
+					}
+				),
+				MenuCardSection(
+					title = "操作",
+					items = listOf(
+						MenuCardItem("增加车次", onClick = { addNewLoadingTrip() }, accent = true),
+						MenuCardItem("删除当前车次", onClick = { confirmDeleteCurrentPackageOrTrip() }, danger = true)
+					)
+				)
+			)
+		)
+		return
 	}
 
-	popup.setOnMenuItemClickListener { item ->
-		when {
-			item.itemId == 1 -> {
-				if (currentModeType == ModeType.RETURN_LOADING) {
-					addNewLoadingTrip()
-				} else {
-					addNewPackage()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "包号管理",
+		subtitle = currentPackageName.ifBlank { "请选择或新增包号" },
+		sections = listOf(
+			MenuCardSection(
+				title = "当前包号",
+				items = getAllPackageNamesInOrder().map { packageName ->
+					MenuCardItem(
+						label = packageName,
+						onClick = { switchPackage(packageName) },
+						selected = packageName == currentPackageName
+					)
 				}
-				true
-			}
-
-			item.itemId == 2 -> {
-				confirmDeleteCurrentPackageOrTrip()
-				true
-			}
-
-			item.itemId >= 1000 -> {
-				if (currentModeType == ModeType.RETURN_LOADING) {
-					switchLoadingTrip(item.title.toString())
-				} else {
-					switchPackage(item.title.toString())
-				}
-				true
-			}
-
-			else -> false
-		}
-	}
-	popup.show()
+			),
+			MenuCardSection(
+				title = "操作",
+				items = listOf(
+					MenuCardItem("增加包号", onClick = { addNewPackage() }, accent = true),
+					MenuCardItem("删除当前包号", onClick = { confirmDeleteCurrentPackageOrTrip() }, danger = true)
+				)
+			)
+		)
+	)
 }
 
 suspend fun MainActivity.createProjectInternal(name: String, buildingName: String) {
@@ -149,19 +153,19 @@ suspend fun MainActivity.deleteProjectInternal(project: ProjectEntity) {
 }
 
 
-fun MainActivity.confirmDeleteProject(project: ProjectEntity, parentDialog: AlertDialog) {
-	AlertDialog.Builder(this)
-		.setTitle("确认删除")
-		.setMessage("确定删除项目“${project.name}”吗？\n删除后无法恢复。")
-		.setNegativeButton("取消", null)
-		.setPositiveButton("删除") { _, _ ->
-			lifecycleScope.launch {
-				deleteProjectInternal(project)
-				parentDialog.dismiss()
-				showProjectSelectDialog()
-			}
+fun MainActivity.confirmDeleteProject(project: ProjectEntity, parentDialog: android.app.Dialog) {
+	showConfirmCardDialog(
+		title = "确认删除",
+		message = "确定删除项目“${project.name}”吗？\n删除后无法恢复。",
+		confirmText = "删除",
+		dangerMessage = true
+	) {
+		lifecycleScope.launch {
+			deleteProjectInternal(project)
+			parentDialog.dismiss()
+			showProjectSelectDialog()
 		}
-		.show()
+	}
 }
 
 
@@ -295,28 +299,28 @@ fun MainActivity.confirmDeleteCurrentPackageOrTrip() {
 			return
 		}
 
-		AlertDialog.Builder(this)
-			.setTitle("确认删除")
-			.setMessage("是否删除${currentLoadingTripName}数据？\n删除后无法恢复。")
-			.setNegativeButton("取消", null)
-			.setPositiveButton("删除") { _, _ ->
-				deleteCurrentLoadingTrip()
-			}
-			.show()
+		showConfirmCardDialog(
+			title = "确认删除",
+			message = "是否删除${currentLoadingTripName}数据？\n删除后无法恢复。",
+			confirmText = "删除",
+			dangerMessage = true
+		) {
+			deleteCurrentLoadingTrip()
+		}
 	} else {
 		if (currentPackageName.isBlank()) {
 			toast("当前没有可删除的包号")
 			return
 		}
 
-		AlertDialog.Builder(this)
-			.setTitle("确认删除")
-			.setMessage("是否删除${currentPackageName}数据？\n删除后无法恢复。")
-			.setNegativeButton("取消", null)
-			.setPositiveButton("删除") { _, _ ->
-				deleteCurrentPackage()
-			}
-			.show()
+		showConfirmCardDialog(
+			title = "确认删除",
+			message = "是否删除${currentPackageName}数据？\n删除后无法恢复。",
+			confirmText = "删除",
+			dangerMessage = true
+		) {
+			deleteCurrentPackage()
+		}
 	}
 }
 
@@ -483,36 +487,30 @@ fun MainActivity.showBuildingMenuPopup(anchor: View) {
 		return
 	}
 
-	val popup = PopupMenu(this, anchor)
-	var order = 0
-
-	getAllBuildingNamesInOrder().forEachIndexed { index, buildingName ->
-		popup.menu.add(0, 1000 + index, order++, buildingName)
-	}
-	popup.menu.add(0, 1, order++, "增加楼栋")
-	popup.menu.add(0, 2, order, "删除当前楼栋")
-
-	popup.setOnMenuItemClickListener { item ->
-		when {
-			item.itemId == 1 -> {
-				showCreateBuildingDialog()
-				true
-			}
-
-			item.itemId == 2 -> {
-				confirmDeleteCurrentBuilding()
-				true
-			}
-
-			item.itemId >= 1000 -> {
-				switchBuilding(item.title.toString())
-				true
-			}
-
-			else -> false
-		}
-	}
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "楼栋管理",
+		subtitle = currentBuildingName.ifBlank { "请选择楼栋" },
+		sections = listOf(
+			MenuCardSection(
+				title = "当前楼栋",
+				items = getAllBuildingNamesInOrder().map { buildingName ->
+					MenuCardItem(
+						label = buildingName,
+						onClick = { switchBuilding(buildingName) },
+						selected = buildingName == currentBuildingName
+					)
+				}
+			),
+			MenuCardSection(
+				title = "操作",
+				items = listOf(
+					MenuCardItem("增加楼栋", onClick = { showCreateBuildingDialog() }, accent = true),
+					MenuCardItem("删除当前楼栋", onClick = { confirmDeleteCurrentBuilding() }, danger = true)
+				)
+			)
+		)
+	)
 }
 
 fun MainActivity.switchProject(project: ProjectEntity) {
@@ -558,45 +556,6 @@ suspend fun MainActivity.switchProjectById(projectId: Long) {
 }
 
 
-fun MainActivity.showCreateBuildingDialog() {
-	val input = android.widget.EditText(this).apply {
-		hint = "请输入楼栋号，如：2号楼"
-		isSingleLine = true
-	}
-
-	AlertDialog.Builder(this)
-		.setTitle("增加楼栋")
-		.setView(input)
-		.setNegativeButton("取消", null)
-		.setPositiveButton("确定", null)
-		.create()
-		.also { dialog ->
-			dialog.setOnShowListener {
-				dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-					val name = input.text.toString().trim()
-					if (name.isBlank()) {
-						toast("楼栋号不能为空")
-						return@setOnClickListener
-					}
-
-					if (getAllBuildingNamesInOrder().contains(name)) {
-						toast("楼栋已存在")
-						return@setOnClickListener
-					}
-
-					saveCurrentBuildingScopeToMemory()
-					buildingStandardContentMap[name] = ""
-					buildingFastContentMap[name] = ""
-					buildingLoadingContentMap[name] = ""
-					switchBuilding(name)
-					saveCurrentProjectContent()
-					dialog.dismiss()
-				}
-			}
-			dialog.show()
-		}
-}
-
 fun MainActivity.switchBuilding(buildingName: String) {
 	if (buildingName.isBlank()) return
 
@@ -618,14 +577,14 @@ fun MainActivity.confirmDeleteCurrentBuilding() {
 		return
 	}
 
-	AlertDialog.Builder(this)
-		.setTitle("确认删除")
-		.setMessage("是否删除${target}数据？\n删除后无法恢复。")
-		.setNegativeButton("取消", null)
-		.setPositiveButton("删除") { _, _ ->
-			deleteCurrentBuilding()
-		}
-		.show()
+	showConfirmCardDialog(
+		title = "确认删除",
+		message = "是否删除${target}数据？\n删除后无法恢复。",
+		confirmText = "删除",
+		dangerMessage = true
+	) {
+		deleteCurrentBuilding()
+	}
 }
 
 fun MainActivity.deleteCurrentBuilding() {
@@ -781,103 +740,23 @@ fun MainActivity.deserializeLoadingContent(content: String) {
 }
 
 
-fun MainActivity.showProjectSelectDialog() {
-	lifecycleScope.launch {
-		val projects = withContext(Dispatchers.IO) { repository.getAllProjects() }
-
-		if (projects.isEmpty()) {
-			toast("暂无项目")
-			return@launch
-		}
-
-		val scrollView = ScrollView(this@showProjectSelectDialog)
-		val container = LinearLayout(this@showProjectSelectDialog).apply {
-			orientation = LinearLayout.VERTICAL
-			setPadding(dp(8), dp(8), dp(8), dp(8))
-		}
-		scrollView.addView(container)
-
-		val dialog = AlertDialog.Builder(this@showProjectSelectDialog)
-			.setTitle("选择项目")
-			.setView(scrollView)
-			.setNegativeButton("关闭", null)
-			.create()
-
-		projects.forEach { project ->
-			val row = LinearLayout(this@showProjectSelectDialog).apply {
-				orientation = LinearLayout.HORIZONTAL
-				gravity = Gravity.CENTER_VERTICAL
-				setPadding(dp(6), dp(6), dp(6), dp(6))
-			}
-
-			val nameView = TextView(this@showProjectSelectDialog).apply {
-				text = project.name
-
-				textSize = 16f
-				setTextColor(0xFF222222.toInt())
-				layoutParams = LinearLayout.LayoutParams(
-					0,
-					LinearLayout.LayoutParams.WRAP_CONTENT,
-					1f
-				)
-				setPadding(dp(4), dp(8), dp(4), dp(8))
-				setOnClickListener {
-					lifecycleScope.launch {
-						switchProjectById(project.id)
-						dialog.dismiss()
-					}
-				}
-			}
-
-			val deleteBtn = Button(this@showProjectSelectDialog).apply {
-				text = "删除"
-				textSize = 12f
-				isAllCaps = false
-				minWidth = 0
-				minimumWidth = 0
-				setPadding(dp(10), dp(4), dp(10), dp(4))
-				setOnClickListener {
-					confirmDeleteProject(project, dialog)
-				}
-			}
-
-			row.addView(nameView)
-			row.addView(deleteBtn)
-			container.addView(row)
-		}
-
-		dialog.show()
-	}
-}
 
 
 fun MainActivity.showProjectMenuPopup(anchor: View) {
-	val popup = PopupMenu(this, anchor)
-	popup.menu.add(0, 1, 0, "选择项目")
-	popup.menu.add(0, 2, 1, "新建项目")
-	popup.menu.add(0, 3, 2, "查看服务器项目")
-
-	popup.setOnMenuItemClickListener { item ->
-		when (item.itemId) {
-			1 -> {
-				showProjectSelectDialog()
-				true
-			}
-
-			2 -> {
-				showCreateProjectDialog()
-				true
-			}
-
-			3 -> {
-				loadServerProjectList()
-				true
-			}
-
-			else -> false
-		}
-	}
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "项目菜单",
+		subtitle = currentProjectName.ifBlank { "请选择项目" },
+		sections = listOf(
+			MenuCardSection(
+				items = listOf(
+					MenuCardItem("选择项目", onClick = { showProjectSelectDialog() }, accent = true),
+					MenuCardItem("新建项目", onClick = { showCreateProjectDialog() }),
+					MenuCardItem("查看服务器项目", onClick = { loadServerProjectList() })
+				)
+			)
+		)
+	)
 }
 
 

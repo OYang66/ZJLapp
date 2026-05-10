@@ -1,12 +1,15 @@
 package com.example.datarecorder
 
+import android.Manifest
+import android.animation.Animator
+import android.animation.ValueAnimator
+import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,24 +17,28 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
+import android.widget.FrameLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.datarecorder.network.RetrofitClient
+import com.iflytek.sparkchain.core.asr.ASR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -199,10 +206,29 @@ class MainActivity : AppCompatActivity() {
 	val packageCurrentStandardRowMap = linkedMapOf<String, StandardRow>()
 	val packageFastRowsMap = linkedMapOf<String, MutableList<FastRow>>()
 	val packageCurrentFastRowMap = linkedMapOf<String, FastRow>()
+	var fastSparkAsr: ASR? = null
+	var fastSparkInitialized = false
+	var fastSparkSessionIndex = 0
+	val fastSparkTextBuilder = StringBuilder()
+	var fastSparkStopRunnable: Runnable? = null
+	var fastVoiceRecorder: FastVoiceAudioRecorder? = null
+	var fastVoiceListening = false
+	var fastVoiceWaitingResult = false
+	var fastVoiceIgnoreResult = false
+	var fastVoiceTouchActive = false
+	var fastVoiceAwaitingPermission = false
+	var fastVoicePressStartedAt = 0L
+	var fastVoiceHoldDialog: Dialog? = null
+	val fastVoiceHoldAnimators = mutableListOf<Animator>()
+	var fastVoiceHoldButton: View? = null
+	var fastVoiceButtonOverlayHost: ViewGroup? = null
+	val fastVoiceButtonEffectAnimators = mutableListOf<ValueAnimator>()
+	val fastVoiceButtonEffectDrawables = mutableListOf<Drawable>()
 
 	private val handler = Handler(Looper.getMainLooper())
 	private var autoSaveRunnable: Runnable? = null
 	private var historyBackupRunnable: Runnable? = null
+	private var onlineActiveRunnable: Runnable? = null
 	private val historyBackupIntervalMs = 5 * 60 * 1000L
 	val historyBackupRelativePath = "${Environment.DIRECTORY_DOCUMENTS}/铝模板统计/历史数据/"
 	val historyBackupDirNameLegacy = "铝模板统计/历史数据"
@@ -263,6 +289,17 @@ class MainActivity : AppCompatActivity() {
 				rowIndex = pendingQualityPhotoRowIndex,
 				uri = uri
 			)
+		}
+
+	val fastVoicePermissionLauncher =
+		registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+			if (granted) {
+				fastVoiceAwaitingPermission = false
+				toast("已授予录音权限，请重新长按说话")
+			} else {
+				fastVoiceAwaitingPermission = false
+				toast("未授予录音权限，无法使用语音识别")
+			}
 		}
 
 	val modeNameStandard = "型号统计"
@@ -362,6 +399,7 @@ class MainActivity : AppCompatActivity() {
 		super.onResume()
 		appUpdateManager.onHostResume()
 		checkAccountStatusNow()
+		reportOnlineActive()
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -394,6 +432,8 @@ class MainActivity : AppCompatActivity() {
 		initQualityInputButtons()
 		registerLogoutReceiver()
 		checkAccountStatusNow()
+		reportOnlineActive()
+		startOnlineActiveHeartbeat()
 		AccountStatusScheduler.start(this)
 
 		currentModeType = readLastModeType()
@@ -421,6 +461,9 @@ class MainActivity : AppCompatActivity() {
 		historyBackupRunnable?.let {
 			handler.removeCallbacks(it)
 		}
+		onlineActiveRunnable?.let {
+			handler.removeCallbacks(it)
+		}
 
 		runCatching {
 			saveCurrentProjectContent()
@@ -431,6 +474,7 @@ class MainActivity : AppCompatActivity() {
 		unregisterLogoutReceiverSafe()
 
 		appUpdateManager.release()
+		releaseFastSparkVoice()
 
 		ioExecutor.shutdown()
 
@@ -591,110 +635,45 @@ class MainActivity : AppCompatActivity() {
 		}
 	}
 
-	private fun showMoreMenuPopup(anchor: View) {
-		val popup = PopupMenu(this, anchor)
-		popup.menu.add(0, 1, 0, "导出")
-		popup.menu.add(0, 2, 1, "分享")
-		popup.menu.add(0, 3, 2, "一键导出返厂汇总表")
-		popup.menu.add(0, 4, 3, "检查更新")
-		popup.menu.add(0, 5, 4, "二维码识别")
-		popup.menu.add(0, 6, 5, "NFC碰一碰")
-		popup.menu.add(0, 7, 6, "历史数据")
-		popup.menu.add(0, 8, 7, "上传当前文件到服务器")
-		popup.menu.add(0, 9, 8, "查看服务器统计")
-
-		popup.setOnMenuItemClickListener { item ->
-			when (item.itemId) {
-				1 -> {
-					requestExportFolderAndExport()
-					true
-				}
-
-				2 -> {
-					shareCurrentModeProject()
-					true
-				}
-
-				3 -> {
-					shareLoadingSummaryProject()
-					true
-				}
-
-				4 -> {
-					appUpdateManager.checkUpdate()
-					true
-				}
-
-				5 -> {
-					showFeatureComingSoonDialog(
-						title = "二维码识别",
-						message = "你发现了一个新功能，这个功能通过摄像头连续扫描模板二维码，即可连续统计模板的安装编号及型号。但目前资金不足，人员不够，代码未写，敬请期待"
-					)
-					true
-				}
-
-				6 -> {
-					showFeatureComingSoonDialog(
-						title = "NFC碰一碰",
-						message = "你发现了一个更加强大的功能，这个功能通过手机靠近模板编码位置，即可自动统计模板的安装编号及型号。但目前资金不足，人员不够，代码未写，敬请期待"
-					)
-					true
-				}
-
-				7 -> {
-					showHistoryBackupDialog()
-					true
-				}
-
-				8 -> {
-					uploadCurrentModeProjectToServer()
-					true
-				}
-
-				9 -> {
-					loadServerStatSummary()
-					true
-				}
-
-				else -> false
-			}
-		}
-
-		popup.show()
-	}
-
-
 	private fun showAccountPopup(anchor: View) {
 		val username = SessionManager.getUsername(this).ifBlank { "未登录账号" }
-
-		val popup = PopupMenu(this, anchor)
-		popup.menu.add(0, 1, 0, "账号：$username")
-		popup.menu.add(0, 2, 1, "访问后台")
-		popup.menu.add(0, 3, 2, "退出登录")
-
-		popup.setOnMenuItemClickListener { item ->
-			when (item.itemId) {
-				1 -> true
-				2 -> {
-					val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
-					startActivity(intent)
-					true
-				}
-
-				3 -> {
-					SessionManager.clearLogin(this)
-					AccountStatusScheduler.stop(this)
-					startActivity(Intent(this, LoginActivity::class.java))
-					finish()
-					true
-				}
-
-				else -> false
-			}
+		val onlineText = when (SessionManager.getOnlineStatus(this)) {
+			"1" -> "在线"
+			else -> "离线"
 		}
-		popup.show()
+		val lastActiveText = SessionManager.getLastActiveTime(this).ifBlank { "暂无" }
+
+		showAccountCardPopup(
+			anchor = anchor,
+			username = username,
+			onlineText = onlineText,
+			lastActiveText = lastActiveText,
+			onOpenBackend = {
+				val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
+				startActivity(intent)
+			},
+			onLogout = {
+				SessionManager.clearLogin(this)
+				AccountStatusScheduler.stop(this)
+				startActivity(Intent(this, LoginActivity::class.java))
+				finish()
+			}
+		)
 	}
 
+
+	private fun startOnlineActiveHeartbeat() {
+		onlineActiveRunnable?.let { handler.removeCallbacks(it) }
+		onlineActiveRunnable = object : Runnable {
+			override fun run() {
+				if (!isFinishing && !isDestroyed) {
+					reportOnlineActive()
+					handler.postDelayed(this, 5 * 60 * 1000L)
+				}
+			}
+		}
+		handler.postDelayed(onlineActiveRunnable!!, 5 * 60 * 1000L)
+	}
 
 	private fun updateAvatarView() {
 		val username = SessionManager.getUsername(this).trim()
@@ -832,110 +811,6 @@ class MainActivity : AppCompatActivity() {
 	}
 
 
-	private fun showFeatureComingSoonDialog(title: String, message: String) {
-		val dialog = android.app.Dialog(this)
-		dialog.setCancelable(true)
-
-		val root = LinearLayout(this).apply {
-			orientation = LinearLayout.VERTICAL
-			setBackgroundColor(0xFFF5F7FB.toInt())
-			setPadding(dp(18), dp(18), dp(18), dp(18))
-		}
-
-		val card = LinearLayout(this).apply {
-			orientation = LinearLayout.VERTICAL
-			setPadding(dp(18), dp(18), dp(18), dp(18))
-			background = GradientDrawable().apply {
-				shape = GradientDrawable.RECTANGLE
-				setColor(0xFFFFFFFF.toInt())
-				cornerRadius = dpF(20f)
-				setStroke(dp(1), 0xFFE3E7F0.toInt())
-			}
-		}
-
-		val topBar = LinearLayout(this).apply {
-			orientation = LinearLayout.HORIZONTAL
-			gravity = Gravity.CENTER_VERTICAL
-		}
-
-		val titleView = TextView(this).apply {
-			text = title
-			textSize = 20f
-			setTypeface(typeface, Typeface.BOLD)
-			setTextColor(0xFF222222.toInt())
-			layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-		}
-
-		val closeView = TextView(this).apply {
-			text = "×"
-			textSize = 22f
-			setTypeface(typeface, Typeface.BOLD)
-			setTextColor(0xFF666666.toInt())
-			gravity = Gravity.CENTER
-			minWidth = dp(36)
-			minHeight = dp(36)
-			setPadding(dp(8), dp(4), dp(8), dp(4))
-			background = GradientDrawable().apply {
-				shape = GradientDrawable.RECTANGLE
-				setColor(0xFFF1F3F7.toInt())
-				cornerRadius = dpF(12f)
-			}
-			setOnClickListener {
-				dialog.dismiss()
-			}
-		}
-
-		val iconView = TextView(this).apply {
-			text = "✨"
-			textSize = 42f
-			gravity = Gravity.CENTER
-			setPadding(0, dp(18), 0, 0)
-		}
-
-		val hintTitle = TextView(this).apply {
-			text = "敬请期待"
-			textSize = 24f
-			gravity = Gravity.CENTER
-			setTypeface(typeface, Typeface.BOLD)
-			setTextColor(0xFF6C56B3.toInt())
-			setPadding(0, dp(12), 0, 0)
-		}
-
-		val messageView = TextView(this).apply {
-			text = message
-			textSize = 17f
-			setTextColor(0xFF333333.toInt())
-			setLineSpacing(dpF(6f), 1.12f)
-			setPadding(0, dp(20), 0, dp(6))
-		}
-
-		topBar.addView(titleView)
-		topBar.addView(closeView)
-
-		card.addView(topBar)
-		card.addView(iconView)
-		card.addView(hintTitle)
-		card.addView(messageView)
-
-		root.addView(
-			card,
-			LinearLayout.LayoutParams(
-				LinearLayout.LayoutParams.MATCH_PARENT,
-				LinearLayout.LayoutParams.WRAP_CONTENT
-			)
-		)
-
-		dialog.setContentView(root)
-		dialog.show()
-
-		dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-		dialog.window?.setLayout(
-			(resources.displayMetrics.widthPixels * 0.92f).toInt(),
-			android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-		)
-	}
-
-
 	fun appendModelToken(origin: String, token: String): String {
 		if (token !in autoSpaceModelTokens) return origin + token
 
@@ -1050,63 +925,63 @@ class MainActivity : AppCompatActivity() {
 
 
 	fun confirmDeleteStandardRow(savedRowIndex: Int?, isCurrentRow: Boolean) {
-		AlertDialog.Builder(this)
-			.setTitle("确认删除")
-			.setMessage("确定删除这一行吗？删除后无法恢复。")
-			.setPositiveButton("删除") { _, _ ->
-				if (savedRowIndex != null && savedRowIndex in savedStandardRows.indices) {
-					savedStandardRows.removeAt(savedRowIndex)
+		showConfirmCardDialog(
+			title = "确认删除",
+			message = "确定删除这一行吗？删除后无法恢复。",
+			confirmText = "删除",
+			dangerMessage = true
+		) {
+			if (savedRowIndex != null && savedRowIndex in savedStandardRows.indices) {
+				savedStandardRows.removeAt(savedRowIndex)
 
-					if (editingStandardRowIndex != null) {
-						val editingIndex = editingStandardRowIndex!!
-						when {
-							editingIndex == savedRowIndex -> clearStandardEditingState()
-							editingIndex > savedRowIndex -> editingStandardRowIndex =
-								editingIndex - 1
-						}
+				if (editingStandardRowIndex != null) {
+					val editingIndex = editingStandardRowIndex!!
+					when {
+						editingIndex == savedRowIndex -> clearStandardEditingState()
+						editingIndex > savedRowIndex -> editingStandardRowIndex =
+							editingIndex - 1
 					}
-				} else if (isCurrentRow) {
-					currentStandardRow = StandardRow()
-					currentStandardField = StandardField.INSTALL_NO
-					lastStandardField = StandardField.INSTALL_NO
-					clearStandardEditingState()
 				}
-
-				updateDisplayTable()
-				triggerAutoSaveDebounced()
+			} else if (isCurrentRow) {
+				currentStandardRow = StandardRow()
+				currentStandardField = StandardField.INSTALL_NO
+				lastStandardField = StandardField.INSTALL_NO
+				clearStandardEditingState()
 			}
-			.setNegativeButton("取消", null)
-			.show()
+
+			updateDisplayTable()
+			triggerAutoSaveDebounced()
+		}
 	}
 
 	fun confirmDeleteFastRow(savedRowIndex: Int?, isCurrentRow: Boolean) {
-		AlertDialog.Builder(this)
-			.setTitle("确认删除")
-			.setMessage("确定删除这一行吗？删除后无法恢复。")
-			.setPositiveButton("删除") { _, _ ->
-				if (savedRowIndex != null && savedRowIndex in savedFastRows.indices) {
-					savedFastRows.removeAt(savedRowIndex)
+		showConfirmCardDialog(
+			title = "确认删除",
+			message = "确定删除这一行吗？删除后无法恢复。",
+			confirmText = "删除",
+			dangerMessage = true
+		) {
+			if (savedRowIndex != null && savedRowIndex in savedFastRows.indices) {
+				savedFastRows.removeAt(savedRowIndex)
 
-					if (editingFastRowIndex != null) {
-						val editingIndex = editingFastRowIndex!!
-						when {
-							editingIndex == savedRowIndex -> clearFastEditingState()
-							editingIndex > savedRowIndex -> editingFastRowIndex = editingIndex - 1
-						}
+				if (editingFastRowIndex != null) {
+					val editingIndex = editingFastRowIndex!!
+					when {
+						editingIndex == savedRowIndex -> clearFastEditingState()
+						editingIndex > savedRowIndex -> editingFastRowIndex = editingIndex - 1
 					}
-				} else if (isCurrentRow) {
-					currentFastRow = FastRow()
-					currentFastNumericField = FastField.WIDTH
-					currentFastActiveField = FastField.WIDTH
-					lastFastField = FastField.WIDTH
-					clearFastEditingState()
 				}
-
-				updateDisplayTable()
-				triggerAutoSaveDebounced()
+			} else if (isCurrentRow) {
+				currentFastRow = FastRow()
+				currentFastNumericField = FastField.WIDTH
+				currentFastActiveField = FastField.WIDTH
+				lastFastField = FastField.WIDTH
+				clearFastEditingState()
 			}
-			.setNegativeButton("取消", null)
-			.show()
+
+			updateDisplayTable()
+			triggerAutoSaveDebounced()
+		}
 	}
 
 	// =========================
@@ -1490,14 +1365,14 @@ class MainActivity : AppCompatActivity() {
 	}
 
 	fun confirmRestoreHistoryBackup(item: BackupItem) {
-		AlertDialog.Builder(this)
-			.setTitle("是否恢复历史数据")
-			.setMessage("是否恢复历史数据，此操作会覆盖当前数据")
-			.setNegativeButton("取消", null)
-			.setPositiveButton("确认") { _, _ ->
-				restoreHistoryBackup(item)
-			}
-			.show()
+		showConfirmCardDialog(
+			title = "是否恢复历史数据",
+			message = "是否恢复历史数据，此操作会覆盖当前数据。",
+			confirmText = "确认",
+			dangerMessage = true
+		) {
+			restoreHistoryBackup(item)
+		}
 	}
 
 

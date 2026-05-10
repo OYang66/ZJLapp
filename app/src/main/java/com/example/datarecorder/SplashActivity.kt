@@ -39,6 +39,11 @@ class SplashActivity : AppCompatActivity() {
 
 				val data = response.data
 				if (response.code == 200 && data != null) {
+					SessionManager.saveOnlineState(
+						this@SplashActivity,
+						data.onlineStatus,
+						data.lastActiveTime
+					)
 					if (!data.valid) {
 						forceLogoutToLogin(
 							data.message.ifBlank { "账号已停用或状态异常，已退出登录" }

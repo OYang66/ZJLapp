@@ -1,11 +1,48 @@
 package com.example.datarecorder
 
+import android.Manifest
+import android.animation.ValueAnimator
+import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.drawable.Drawable
+import android.os.Build
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
+import android.widget.Button
+import android.widget.GridLayout
 import android.widget.TableRow
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import java.text.DecimalFormat
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.round
+import kotlin.math.roundToInt
 
+enum class FastVoiceUnit(
+	val millimeterFactor: Double
+) {
+	MM(millimeterFactor = 1.0),
+	CM(millimeterFactor = 10.0),
+	M(millimeterFactor = 1000.0)
+}
+
+private data class FastVoiceParsedDimension(
+	val valueInMillimeters: Double
+)
+
+private val fastVoiceDimensionFormatter = DecimalFormat("0.#")
 
 // =========================
 // 返厂统计
@@ -28,10 +65,327 @@ fun MainActivity.initFastModeArea() {
 	}
 
 	bindFastCustomArea(customTextSize)
+	bindFastModelButtons(modelTextSize)
+}
 
-	bindAdaptiveFixedColumnButtons(layoutFastModel, fastModelKeys, 3, modelTextSize) { value ->
-		appendFastModelToken(value)
+fun MainActivity.bindFastModelButtons(textSizeSp: Float) {
+	stopFastVoiceButtonRecordingEffects(resetView = false, clearButtonReference = true)
+	layoutFastModel.removeAllViews()
+	layoutFastModel.columnCount = 4
+	layoutFastModel.rowCount = 1
+
+	fastModelKeys.forEachIndexed { index, value ->
+		layoutFastModel.addView(
+			createFastModelActionButton(
+				text = value,
+				row = 0,
+				column = index,
+				textSizeSp = textSizeSp
+			) {
+				appendFastModelToken(value)
+			}
+		)
 	}
+
+	layoutFastModel.addView(
+		createFastVoiceHoldButton(
+			row = 0,
+			column = fastModelKeys.size,
+			textSizeSp = textSizeSp
+		)
+	)
+}
+
+private fun MainActivity.createFastModelActionButton(
+	text: String,
+	row: Int,
+	column: Int,
+	textSizeSp: Float,
+	onClick: () -> Unit
+): Button {
+	return Button(this).apply {
+		this.text = text
+		isAllCaps = false
+		gravity = Gravity.CENTER
+		textAlignment = View.TEXT_ALIGNMENT_CENTER
+		includeFontPadding = false
+		setPadding(dp(1), 0, dp(1), 0)
+		minWidth = 0
+		minHeight = 0
+		minimumWidth = 0
+		minimumHeight = 0
+		setBackgroundResource(R.drawable.bg_key)
+		setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+		maxLines = 1
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			setAutoSizeTextTypeUniformWithConfiguration(
+				6,
+				textSizeSp.toInt().coerceAtLeast(8),
+				1,
+				android.util.TypedValue.COMPLEX_UNIT_SP
+			)
+		}
+
+		layoutParams = GridLayout.LayoutParams(
+			GridLayout.spec(row, 1, 1f),
+			GridLayout.spec(column, 1, 1f)
+		).apply {
+			width = 0
+			height = 0
+			setGravity(Gravity.FILL)
+			setMargins(dp(1), dp(1), dp(1), dp(1))
+		}
+
+		setOnClickListener { onClick() }
+	}
+}
+
+private fun MainActivity.createFastVoiceHoldButton(
+	row: Int,
+	column: Int,
+	textSizeSp: Float
+): Button {
+	return createFastModelActionButton(
+		text = "",
+		row = row,
+		column = column,
+		textSizeSp = textSizeSp,
+		onClick = {}
+	).apply {
+		contentDescription = "麦克风"
+		setBackgroundResource(R.drawable.bg_fast_voice_button)
+		setPadding(0, 0, 0, 0)
+		elevation = dpF(8f)
+		fastVoiceHoldButton = this
+		if (fastVoiceListening || fastVoiceWaitingResult) {
+			post { startFastVoiceButtonRecordingEffects(this) }
+		}
+		setOnTouchListener { view, event ->
+			fastVoiceHoldButton = view
+			when (event.actionMasked) {
+				MotionEvent.ACTION_DOWN -> {
+					isPressed = true
+					animateFastVoiceHoldButton(view, pressed = true)
+					startFastVoiceHoldListening()
+					true
+				}
+
+				MotionEvent.ACTION_MOVE -> {
+					if (!isFastVoiceTouchInside(view, event)) {
+						isPressed = false
+						animateFastVoiceHoldButton(view, pressed = false)
+						finishFastVoiceHoldListening(cancelRecognition = true, showTooShortToast = false)
+					}
+					true
+				}
+
+				MotionEvent.ACTION_UP -> {
+					isPressed = false
+					animateFastVoiceHoldButton(view, pressed = false)
+					finishFastVoiceHoldListening(cancelRecognition = false, showTooShortToast = true)
+					view.performClick()
+					true
+				}
+
+				MotionEvent.ACTION_CANCEL -> {
+					isPressed = false
+					animateFastVoiceHoldButton(view, pressed = false)
+					finishFastVoiceHoldListening(cancelRecognition = true, showTooShortToast = false)
+					true
+				}
+
+				else -> false
+			}
+		}
+	}
+}
+
+private fun MainActivity.animateFastVoiceHoldButton(view: View, pressed: Boolean) {
+	view.animate()
+		.scaleX(if (pressed) 0.92f else 1f)
+		.scaleY(if (pressed) 0.92f else 1f)
+		.alpha(if (pressed) 0.97f else 1f)
+		.translationZ(if (pressed) dpF(3f) else dpF(8f))
+		.setDuration(110L)
+		.start()
+}
+
+fun MainActivity.startFastVoiceButtonRecordingEffects(resolvedView: View? = fastVoiceHoldButton) {
+	val resolvedView = resolvedView ?: return
+	val overlayHost = resolvedView.parent as? ViewGroup ?: return
+	if (overlayHost.width == 0 || overlayHost.height == 0 || resolvedView.width == 0 || resolvedView.height == 0) {
+		resolvedView.post { startFastVoiceButtonRecordingEffects(resolvedView) }
+		return
+	}
+	if (fastVoiceButtonOverlayHost === overlayHost && fastVoiceButtonEffectDrawables.isNotEmpty() && fastVoiceHoldButton === resolvedView) {
+		return
+	}
+
+	stopFastVoiceButtonRecordingEffects(resetView = false)
+	fastVoiceHoldButton = resolvedView
+	fastVoiceButtonOverlayHost = overlayHost
+
+	val pulseDrawable = FastVoiceButtonPulseDrawable(resolvedView)
+	val glowDrawable = FastVoiceButtonGlowDrawable(resolvedView)
+	pulseDrawable.setBounds(0, 0, overlayHost.width, overlayHost.height)
+	glowDrawable.setBounds(0, 0, overlayHost.width, overlayHost.height)
+	overlayHost.overlay.add(pulseDrawable)
+	overlayHost.overlay.add(glowDrawable)
+	fastVoiceButtonEffectDrawables += pulseDrawable
+	fastVoiceButtonEffectDrawables += glowDrawable
+
+	val primaryPulseAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+		duration = 1380L
+		repeatCount = ValueAnimator.INFINITE
+		interpolator = LinearInterpolator()
+		addUpdateListener {
+			pulseDrawable.primaryProgress = it.animatedValue as Float
+		}
+		start()
+	}
+	val secondaryPulseAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+		duration = 1380L
+		startDelay = 460L
+		repeatCount = ValueAnimator.INFINITE
+		interpolator = LinearInterpolator()
+		addUpdateListener {
+			pulseDrawable.secondaryProgress = it.animatedValue as Float
+		}
+		start()
+	}
+	val glowAnimator = ValueAnimator.ofFloat(0.38f, 1f).apply {
+		duration = 920L
+		repeatCount = ValueAnimator.INFINITE
+		repeatMode = ValueAnimator.REVERSE
+		interpolator = AccelerateDecelerateInterpolator()
+		addUpdateListener {
+			glowDrawable.intensity = it.animatedValue as Float
+		}
+		start()
+	}
+	fastVoiceButtonEffectAnimators += primaryPulseAnimator
+	fastVoiceButtonEffectAnimators += secondaryPulseAnimator
+	fastVoiceButtonEffectAnimators += glowAnimator
+}
+
+fun MainActivity.stopFastVoiceButtonRecordingEffects(
+	resetView: Boolean = true,
+	clearButtonReference: Boolean = false
+) {
+	fastVoiceButtonEffectAnimators.forEach { it.cancel() }
+	fastVoiceButtonEffectAnimators.clear()
+	fastVoiceButtonOverlayHost?.let { overlayHost ->
+		fastVoiceButtonEffectDrawables.forEach { drawable ->
+			overlayHost.overlay.remove(drawable)
+		}
+	}
+	fastVoiceButtonEffectDrawables.clear()
+	fastVoiceButtonOverlayHost = null
+	if (resetView) {
+		fastVoiceHoldButton?.invalidate()
+	}
+	if (clearButtonReference) {
+		fastVoiceHoldButton = null
+	}
+}
+
+private fun MainActivity.isFastVoiceTouchInside(view: View, event: MotionEvent): Boolean {
+	return event.x >= 0f && event.x <= view.width.toFloat() && event.y >= 0f && event.y <= view.height.toFloat()
+}
+
+private class FastVoiceButtonPulseDrawable(
+	private val hostView: View
+) : Drawable() {
+	private val density = hostView.resources.displayMetrics.density
+	private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+		style = Paint.Style.STROKE
+	}
+
+	var primaryProgress: Float = 0f
+		set(value) {
+			field = value
+			invalidateSelf()
+		}
+
+	var secondaryProgress: Float = 0.5f
+		set(value) {
+			field = value
+			invalidateSelf()
+		}
+
+	override fun draw(canvas: Canvas) {
+		if (!hostView.isAttachedToWindow) return
+		val overlayHost = hostView.parent as? ViewGroup ?: return
+		if (bounds.width() != overlayHost.width || bounds.height() != overlayHost.height) {
+			setBounds(0, 0, overlayHost.width, overlayHost.height)
+		}
+		val centerX = hostView.left + hostView.translationX + hostView.width / 2f
+		val centerY = hostView.top + hostView.translationY + hostView.height / 2f
+		drawRing(canvas, centerX, centerY, primaryProgress)
+		drawRing(canvas, centerX, centerY, secondaryProgress)
+	}
+
+	private fun drawRing(canvas: Canvas, centerX: Float, centerY: Float, progress: Float) {
+		val clamped = progress.coerceIn(0f, 1f)
+		val baseRadius = max(hostView.width, hostView.height) * 0.48f
+		val radius = baseRadius + (12f * density) + (18f * density * clamped)
+		paint.color = Color.argb((92f * (1f - clamped)).roundToInt(), 154, 127, 255)
+		paint.strokeWidth = (2.4f * density) - (0.8f * density * clamped)
+		canvas.drawCircle(centerX, centerY, radius, paint)
+	}
+
+	override fun setAlpha(alpha: Int) = Unit
+
+	override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
+
+	override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+private class FastVoiceButtonGlowDrawable(
+	private val hostView: View
+) : Drawable() {
+	private val density = hostView.resources.displayMetrics.density
+	private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+	var intensity: Float = 0.38f
+		set(value) {
+			field = value
+			invalidateSelf()
+		}
+
+	override fun draw(canvas: Canvas) {
+		if (!hostView.isAttachedToWindow) return
+		val overlayHost = hostView.parent as? ViewGroup ?: return
+		if (bounds.width() != overlayHost.width || bounds.height() != overlayHost.height) {
+			setBounds(0, 0, overlayHost.width, overlayHost.height)
+		}
+		val centerX = hostView.left + hostView.translationX + hostView.width / 2f
+		val centerY = hostView.top + hostView.translationY + hostView.height / 2f
+		val baseRadius = max(hostView.width, hostView.height) * 0.54f
+		val glowRadius = baseRadius + (10f * density) + (8f * density * intensity)
+		val outerAlpha = (60 + 50 * intensity).roundToInt().coerceIn(0, 255)
+		val middleAlpha = (22 + 28 * intensity).roundToInt().coerceIn(0, 255)
+		paint.shader = RadialGradient(
+			centerX,
+			centerY,
+			glowRadius,
+			intArrayOf(
+				Color.argb(outerAlpha, 197, 176, 255),
+				Color.argb(middleAlpha, 124, 101, 235),
+				Color.TRANSPARENT
+			),
+			floatArrayOf(0f, 0.58f, 1f),
+			Shader.TileMode.CLAMP
+		)
+		canvas.drawCircle(centerX, centerY, glowRadius, paint)
+	}
+
+	override fun setAlpha(alpha: Int) = Unit
+
+	override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
+
+	override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
 fun MainActivity.appendFastNumericToken(value: String) {
@@ -158,6 +512,160 @@ fun MainActivity.appendFastModelToken(value: String) {
 	refreshFastVisibleCellsOnly()
 	triggerAutoSaveDebounced()
 
+}
+
+fun MainActivity.startFastVoiceInputWithPermissionCheck() {
+	if (!ensurePackageSelected()) return
+
+	if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+		startFastVoiceListening()
+	} else {
+		fastVoiceAwaitingPermission = true
+		fastVoicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+	}
+}
+
+fun MainActivity.startFastVoiceListening() {
+	if (!ensurePackageSelected()) return
+	if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+		toast("未授予录音权限，无法使用语音识别")
+		return
+	}
+	if (fastVoiceListening || fastVoiceWaitingResult) {
+		toast("语音识别正在进行中")
+		return
+	}
+
+	beginFastSparkVoiceListening(showListeningDialog = false)
+}
+
+fun MainActivity.parseFastVoiceSizePair(rawText: String): Pair<String, String>? {
+	val normalized = normalizeFastVoiceText(rawText)
+	val parts = splitFastVoiceSizeTokens(normalized) ?: return null
+	val width = parseFastVoiceDimension(parts.first) ?: return null
+	val length = parseFastVoiceDimension(parts.second) ?: return null
+	return formatFastVoiceDimension(width.valueInMillimeters) to formatFastVoiceDimension(length.valueInMillimeters)
+}
+
+private fun MainActivity.normalizeFastVoiceText(rawText: String): String {
+	return rawText
+		.trim()
+		.lowercase(Locale.getDefault())
+		.replace(" ", "")
+		.replace("　", "")
+		.replace("乘以", "乘")
+		.replace("乘号", "乘")
+		.replace("成", "乘")
+		.replace("＊", "*")
+		.replace("×", "乘")
+		.replace("*", "乘")
+		.replace("x", "乘")
+		.replace("公分", "厘米")
+		.replace("cm", "厘米")
+		.replace("mm", "毫米")
+		.replace("m", "米")
+}
+
+private fun MainActivity.splitFastVoiceSizeTokens(normalized: String): Pair<String, String>? {
+	val parts = normalized.split("乘").filter { it.isNotBlank() }
+	if (parts.size != 2) {
+		return null
+	}
+	return parts[0] to parts[1]
+}
+
+private fun MainActivity.parseFastVoiceDimension(token: String): FastVoiceParsedDimension? {
+	return when {
+		token.endsWith("毫米") -> {
+			parseNumberToken(token.removeSuffix("毫米"))?.let { value ->
+				FastVoiceParsedDimension(valueInMillimeters = value)
+			}
+		}
+
+		token.endsWith("厘米") -> {
+			parseNumberToken(token.removeSuffix("厘米"))?.let { value ->
+				FastVoiceParsedDimension(valueInMillimeters = value * FastVoiceUnit.CM.millimeterFactor)
+			}
+		}
+
+		token.contains("米") -> parseFastVoiceMeterToken(token)
+
+		else -> {
+			parseNumberToken(token)?.let { value ->
+				FastVoiceParsedDimension(valueInMillimeters = value)
+			}
+		}
+	}
+}
+
+private fun MainActivity.parseFastVoiceMeterToken(token: String): FastVoiceParsedDimension? {
+	val meterParts = token.split("米")
+	if (meterParts.size != 2) {
+		return null
+	}
+	val majorPart = meterParts[0]
+	val tailPart = meterParts[1]
+	if (majorPart.isBlank()) {
+		return null
+	}
+	if (tailPart.isNotBlank() && majorPart.contains('.')) {
+		return null
+	}
+
+	val majorValue = parseNumberToken(majorPart) ?: return null
+	val meterValue = if (tailPart.isBlank()) {
+		majorValue
+	} else {
+		val decimalValue = parseNumberToken("0.$tailPart") ?: return null
+		majorValue + decimalValue
+	}
+	return FastVoiceParsedDimension(
+		valueInMillimeters = meterValue * FastVoiceUnit.M.millimeterFactor
+	)
+}
+
+private fun MainActivity.parseNumberToken(token: String): Double? {
+	if (token.isBlank() || token == ".") {
+		return null
+	}
+	return token.toDoubleOrNull()
+}
+
+private fun MainActivity.formatFastVoiceDimension(valueInMillimeters: Double): String {
+	val roundedValue = round(valueInMillimeters * 10.0) / 10.0
+	return if (roundedValue % 1.0 == 0.0) {
+		roundedValue.toInt().toString()
+	} else {
+		fastVoiceDimensionFormatter.format(roundedValue)
+	}
+}
+
+fun MainActivity.applyFastVoiceSizeToCurrentRow(width: String, length: String) {
+	if (hasFastEditingTarget()) {
+		val oldRowIndex = editingFastRowIndex
+		clearFastEditingState()
+		currentFastNumericField = FastField.WIDTH
+		currentFastActiveField = FastField.WIDTH
+		lastFastField = FastField.WIDTH
+		if (oldRowIndex != null) {
+			rebuildFastRowOnly(oldRowIndex, false)
+		}
+	}
+
+	if (!isFastWidthValid(width) || !isFastLengthValid(length)) {
+		showFastInputWarning("识别成功，但尺寸超出当前 FAST 可录入范围")
+		return
+	}
+
+	currentFastRow.width = width
+	currentFastRow.length = length
+	currentFastNumericField = resolveNextFastNumericFieldAfterModel(currentFastRow)
+	currentFastActiveField = currentFastNumericField
+	lastFastField = currentFastActiveField
+
+	refreshFastVisibleCellsOnly()
+	triggerAutoSaveDebounced()
+	finishCurrentFastRow()
 }
 
 fun MainActivity.moveToNextFastColumn() {
@@ -1021,17 +1529,7 @@ fun MainActivity.selectFastSavedCell(rowIndex: Int, field: FastField) {
 fun MainActivity.showFastRowDeleteOptions(savedRowIndex: Int?, isCurrentRow: Boolean) {
 	if (savedRowIndex == null && (!isCurrentRow || currentFastRow.isEmpty())) return
 
-	val options = arrayOf("删除该行")
-
-	AlertDialog.Builder(this)
-		.setTitle("操作")
-		.setItems(options) { _, which ->
-			if (which == 0) {
-				confirmDeleteFastRow(savedRowIndex, isCurrentRow)
-			}
-		}
-		.setNegativeButton("取消", null)
-		.show()
+	confirmDeleteFastRow(savedRowIndex, isCurrentRow)
 }
 
 
@@ -1131,10 +1629,10 @@ fun MainActivity.handleFastPresetReplaceOnLimit(
 }
 
 
-fun MainActivity.showFastInputWarning() {
+fun MainActivity.showFastInputWarning(message: String = "警告！系统检测到错误输入，请检查输入数据是否有误！") {
 	Toast.makeText(
 		this,
-		"警告！系统检测到错误输入，请检查输入数据是否有误！",
+		message,
 		Toast.LENGTH_SHORT
 	).show()
 }

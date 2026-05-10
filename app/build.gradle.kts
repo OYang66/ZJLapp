@@ -1,3 +1,27 @@
+import java.util.Properties
+
+val localProperties = Properties().apply {
+	val file = rootProject.file("local.properties")
+	if (file.exists()) {
+		file.inputStream().use(::load)
+	}
+}
+
+fun localOrEnv(vararg names: String): String {
+	return names.firstNotNullOfOrNull { name ->
+		localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+			?: System.getenv(name)?.takeIf { it.isNotBlank() }
+	}?.trim().orEmpty()
+}
+
+fun buildConfigString(value: String): String {
+	return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
+
+val sparkAppId = localOrEnv("SPARK_APP_ID", "XUNFEI_SPARK_APP_ID")
+val sparkApiKey = localOrEnv("SPARK_API_KEY", "XUNFEI_SPARK_API_KEY")
+val sparkApiSecret = localOrEnv("SPARK_API_SECRET", "XUNFEI_SPARK_API_SECRET")
+
 plugins {
 	id("com.android.application")
 	id("org.jetbrains.kotlin.android")
@@ -12,12 +36,16 @@ android {
 		applicationId = "com.example.datarecorder"
 		minSdk = 26
 		targetSdk = 34
-		versionCode = 25
-		versionName = "2.5.1"
+		versionCode = 26
+		versionName = "2.6.0"
+		buildConfigField("String", "SPARK_APP_ID", buildConfigString(sparkAppId))
+		buildConfigField("String", "SPARK_API_KEY", buildConfigString(sparkApiKey))
+		buildConfigField("String", "SPARK_API_SECRET", buildConfigString(sparkApiSecret))
 	}
 
 	buildFeatures {
 		viewBinding = true
+		buildConfig = true
 	}
 
 	compileOptions {
@@ -35,6 +63,9 @@ kotlin {
 }
 
 dependencies {
+	implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+	implementation(files("libs/SparkChain.aar"))
+	implementation(files("libs/Codec.aar"))
 	implementation("androidx.core:core-ktx:1.13.1")
 	implementation("androidx.appcompat:appcompat:1.7.0")
 	implementation("com.google.android.material:material:1.12.0")

@@ -194,25 +194,91 @@ fun MainActivity.showQualityMaterialTypeDialog(savedRowIndex: Int?) {
 		"拉片小斜撑", "背楞接头", "铁钩铁锤", "其他铁件"
 	)
 
-	AlertDialog.Builder(this)
-		.setTitle("选择材料类型")
-		.setItems(items.toTypedArray()) { _, which ->
-			val value = items[which]
-			applyQualityMaterialTypeSelection(savedRowIndex, value)
+	lateinit var dialog: android.app.Dialog
+	val content = LinearLayout(this).apply {
+		orientation = LinearLayout.VERTICAL
+		items.forEachIndexed { index, value ->
+			addView(
+				createDialogListItem(
+					label = value,
+					accent = index < 2,
+					onClick = {
+						applyQualityMaterialTypeSelection(savedRowIndex, value)
+						dialog.dismiss()
+					}
+				),
+				LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					if (index > 0) topMargin = dp(8)
+				}
+			)
 		}
-		.setNegativeButton("取消", null)
-		.show()
+	}
+
+	dialog = createCardDialog(
+		title = "选择材料类型",
+		subtitle = "点击后写入当前质量反馈行"
+	) { dlg ->
+		addView(wrapDialogScroll(content, maxHeightDp = 460))
+		addView(
+			createDialogActionButton("关闭", primary = false) {
+				dlg.dismiss()
+			},
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				dp(42)
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}
+	dialog.show()
 }
 
 fun MainActivity.showQualityTypeDialog(savedRowIndex: Int?) {
-	AlertDialog.Builder(this)
-		.setTitle("选择质量类型")
-		.setItems(QualityTypeOption.items.toTypedArray()) { _, which ->
-			val value = QualityTypeOption.items[which]
-			applyQualityTypeSelection(savedRowIndex, value)
+	lateinit var dialog: android.app.Dialog
+	val content = LinearLayout(this).apply {
+		orientation = LinearLayout.VERTICAL
+		QualityTypeOption.items.forEachIndexed { index, value ->
+			addView(
+				createDialogListItem(
+					label = value,
+					accent = index == 0,
+					onClick = {
+						applyQualityTypeSelection(savedRowIndex, value)
+						dialog.dismiss()
+					}
+				),
+				LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					if (index > 0) topMargin = dp(8)
+				}
+			)
 		}
-		.setNegativeButton("取消", null)
-		.show()
+	}
+
+	dialog = createCardDialog(
+		title = "选择质量类型",
+		subtitle = "点击后写入当前质量反馈行"
+	) { dlg ->
+		addView(wrapDialogScroll(content, maxHeightDp = 360))
+		addView(
+			createDialogActionButton("关闭", primary = false) {
+				dlg.dismiss()
+			},
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				dp(42)
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}
+	dialog.show()
 }
 
 
@@ -239,9 +305,11 @@ fun MainActivity.showQualityDescEditorDialog(savedRowIndex: Int?) {
 		)
 	}
 
-	val container = LinearLayout(this).apply {
-		orientation = LinearLayout.VERTICAL
-		setPadding(dp(16), dp(12), dp(16), dp(4))
+	val dialog = createCardDialog(
+		title = "编辑反馈说明",
+		subtitle = "支持清空后重新填写"
+	) { dlg ->
+		addView(createDialogSectionTitle("反馈内容"))
 		addView(
 			input,
 			LinearLayout.LayoutParams(
@@ -249,51 +317,96 @@ fun MainActivity.showQualityDescEditorDialog(savedRowIndex: Int?) {
 				dp(180)
 			)
 		)
-	}
-
-	val dialog = AlertDialog.Builder(this)
-		.setTitle("编辑反馈说明")
-		.setView(container)
-		.setPositiveButton("确认", null)
-		.setNeutralButton("清空", null)
-		.setNegativeButton("取消", null)
-		.create()
-
-	dialog.setOnShowListener {
-		dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-			targetRow.feedbackDesc = input.text.toString().trim()
-			renderQualityFeedbackTable()
-			triggerAutoSaveDebounced()
-			dialog.dismiss()
-		}
-
-		dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-			input.setText("")
-		}
-
-		input.requestFocus()
+		addView(
+			createDialogActionButton("清空", primary = false) {
+				input.setText("")
+			},
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				dp(42)
+			).apply {
+				topMargin = dp(12)
+			}
+		)
+		addView(
+			createDialogActionRow(
+				dialog = dlg,
+				confirmText = "确认",
+				onConfirm = {
+					targetRow.feedbackDesc = input.text.toString().trim()
+					renderQualityFeedbackTable()
+					triggerAutoSaveDebounced()
+					dlg.dismiss()
+				}
+			),
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT
+			).apply {
+				topMargin = dp(12)
+			}
+		)
 	}
 
 	dialog.show()
+	input.requestFocus()
 }
 
 
 fun MainActivity.showQualityPhotoMenu(savedRowIndex: Int?) {
 	pendingQualityPhotoRowIndex = savedRowIndex
 
-	val items = arrayOf("拍照", "从相册添加", "删除")
-
-	AlertDialog.Builder(this)
-		.setTitle("附图")
-		.setItems(items) { _, which ->
-			when (which) {
-				0 -> openQualityCamera()
-				1 -> openQualityGallery()
-				2 -> deleteQualityPhotos(savedRowIndex)
-			}
+	lateinit var dialog: android.app.Dialog
+	val items = listOf(
+		Triple("拍照", "打开相机新增附图", false),
+		Triple("从相册添加", "从系统相册选择图片", false),
+		Triple("删除", "移除当前行已选附图", true)
+	)
+	val content = LinearLayout(this).apply {
+		orientation = LinearLayout.VERTICAL
+		items.forEachIndexed { index, item ->
+			addView(
+				createDialogListItem(
+					label = item.first,
+					subtitle = item.second,
+					danger = item.third,
+					onClick = {
+						when (index) {
+							0 -> openQualityCamera()
+							1 -> openQualityGallery()
+							2 -> deleteQualityPhotos(savedRowIndex)
+						}
+						dialog.dismiss()
+					}
+				),
+				LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.MATCH_PARENT,
+					LinearLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					if (index > 0) topMargin = dp(8)
+				}
+			)
 		}
-		.setNegativeButton("取消", null)
-		.show()
+	}
+
+	dialog = createCardDialog(
+		title = "附图",
+		subtitle = "选择图片操作方式"
+	) { dlg ->
+		addView(content)
+		addView(
+			createDialogActionButton("关闭", primary = false) {
+				dlg.dismiss()
+			},
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				dp(42)
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}
+	dialog.show()
 }
 
 
@@ -305,24 +418,40 @@ fun MainActivity.showQualityFloorInputDialog() {
 		inputType = android.text.InputType.TYPE_CLASS_NUMBER
 		setPadding(dp(12), dp(12), dp(12), dp(12))
 		textSize = 16f
+		background = createCellBackground(0xFFF8F5FF.toInt(), 0xFFE4DAFF.toInt(), 1, 12f)
 	}
 
-	AlertDialog.Builder(this)
-		.setTitle("输入铝模层数")
-		.setView(input)
-		.setNegativeButton("取消", null)
-		.setPositiveButton("确定") { _, _ ->
-			val value = input.text.toString().trim()
-			if (value.isBlank()) {
-				toast("请输入层数")
-				return@setPositiveButton
-			}
+	createCardDialog(
+		title = "输入铝模层数",
+		subtitle = "当前质量反馈模式下的楼层标签"
+	) { dlg ->
+		addView(createDialogSectionTitle("层数"))
+		addView(input)
+		addView(
+			createDialogActionRow(
+				dialog = dlg,
+				confirmText = "确定",
+				onConfirm = {
+					val value = input.text.toString().trim()
+					if (value.isBlank()) {
+						toast("请输入层数")
+						return@createDialogActionRow
+					}
 
-			currentQualityFloorLabel = value
-			updatePackageButtonText()
-			triggerAutoSaveDebounced()
-		}
-		.show()
+					currentQualityFloorLabel = value
+					updatePackageButtonText()
+					triggerAutoSaveDebounced()
+					dlg.dismiss()
+				}
+			),
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}.show()
 }
 
 

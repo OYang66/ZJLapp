@@ -7,7 +7,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.NumberPicker
-import android.widget.PopupMenu
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -63,32 +62,20 @@ fun MainActivity.initLoadingModeArea() {
 }
 
 fun MainActivity.showAluminumMaterialDialog(anchor: View) {
-	val popup = PopupMenu(this, anchor)
-	popup.menu.add(0, 1, 0, "铝模")
-	popup.menu.add(0, 2, 1, "SP")
-	popup.menu.add(0, 3, 2, "铝箱")
-
-	popup.setOnMenuItemClickListener { item ->
-		when (item.itemId) {
-			1 -> {
-				applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "铝模")
-				true
-			}
-
-			2 -> {
-				applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "SP")
-				true
-			}
-
-			3 -> {
-				applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "铝箱")
-				true
-			}
-
-			else -> false
-		}
-	}
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "选择铝物料",
+		subtitle = "点击后新增一条铝模装车记录",
+		sections = listOf(
+			MenuCardSection(
+				items = listOf(
+					MenuCardItem("铝模", onClick = { applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "铝模") }, accent = true),
+					MenuCardItem("SP", onClick = { applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "SP") }),
+					MenuCardItem("铝箱", onClick = { applyLoadingMaterialSelection(ReturnLoadingType.ALUMINUM, "铝箱") })
+				)
+			)
+		)
+	)
 }
 
 fun MainActivity.resequenceLoadingAluminumPackages() {
@@ -142,58 +129,61 @@ fun MainActivity.showLoadingRowActionMenu(
 		listType: ReturnLoadingType,
 		rowIndex: Int
 ) {
-	val popup = PopupMenu(this, anchor)
-	popup.menu.add(0, 1, 0, "删除")
-
-	popup.setOnMenuItemClickListener { item ->
-		when (item.itemId) {
-			1 -> {
-				AlertDialog.Builder(this)
-					.setTitle("删除确认")
-					.setMessage("确认删除当前行吗？")
-					.setNegativeButton("取消", null)
-					.setPositiveButton("删除") { _, _ ->
-						deleteLoadingRow(listType, rowIndex)
-						triggerAutoSaveDebounced()
-					}
-					.show()
-				true
-			}
-
-			else -> false
-		}
-	}
-
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "当前行操作",
+		subtitle = "长按物料名称可打开操作菜单",
+		sections = listOf(
+			MenuCardSection(
+				items = listOf(
+					MenuCardItem("删除当前行", onClick = {
+						showConfirmCardDialog(
+							title = "删除确认",
+							message = "确认删除当前行吗？",
+							confirmText = "删除",
+							dangerMessage = true
+						) {
+							deleteLoadingRow(listType, rowIndex)
+							triggerAutoSaveDebounced()
+						}
+					}, danger = true)
+				)
+			)
+		)
+	)
 }
 
 fun MainActivity.showLoadingPackageModeMenu(anchor: View) {
-	val popup = PopupMenu(this, anchor)
-	popup.menu.add(0, 1, 0, "包号")
-	popup.menu.add(0, 2, 1, "包数")
-
-	popup.setOnMenuItemClickListener { item ->
-		when (item.itemId) {
-			1 -> {
-				loadingAluminumUsePackageCount = false
-				resequenceLoadingAluminumPackages()
-				saveLoadingScreenToCurrentTrip()
-				renderLoadingTable()
-				true
-			}
-
-			2 -> {
-				loadingAluminumUsePackageCount = true
-				saveLoadingScreenToCurrentTrip()
-				renderLoadingTable()
-				true
-			}
-
-			else -> false
-		}
-	}
-
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = "铝模列模式",
+		subtitle = if (loadingAluminumUsePackageCount) "当前按包数录入" else "当前按包号录入",
+		sections = listOf(
+			MenuCardSection(
+				items = listOf(
+					MenuCardItem(
+						"包号",
+						onClick = {
+							loadingAluminumUsePackageCount = false
+							resequenceLoadingAluminumPackages()
+							saveLoadingScreenToCurrentTrip()
+							renderLoadingTable()
+						},
+						selected = !loadingAluminumUsePackageCount
+					),
+					MenuCardItem(
+						"包数",
+						onClick = {
+							loadingAluminumUsePackageCount = true
+							saveLoadingScreenToCurrentTrip()
+							renderLoadingTable()
+						},
+						selected = loadingAluminumUsePackageCount
+					)
+				)
+			)
+		)
+	)
 }
 
 fun MainActivity.buildLoadingHeaderRow(): TableRow {
@@ -404,40 +394,49 @@ fun MainActivity.showLoadingWeightModeMenu(
 		anchor: View,
 		type: ReturnLoadingType
 ) {
-	val popup = PopupMenu(this, anchor)
-	popup.menu.add(0, 1, 0, "单包重量")
-	popup.menu.add(0, 2, 1, "过磅总重量")
+	val isAluminum = type == ReturnLoadingType.ALUMINUM
+	val currentMode = if (isAluminum) loadingAluminumWeightMode else loadingIronWeightMode
+	val title = if (isAluminum) "铝模重量模式" else "铁件重量模式"
 
-	popup.setOnMenuItemClickListener { item ->
-		when (item.itemId) {
-			1 -> {
-				if (type == ReturnLoadingType.ALUMINUM) {
-					loadingAluminumWeightMode = LoadingWeightMode.SINGLE_PACKAGE
-				} else {
-					loadingIronWeightMode = LoadingWeightMode.SINGLE_PACKAGE
-				}
-				saveLoadingScreenToCurrentTrip()
-				renderLoadingTable()
-				triggerAutoSaveDebounced()
-				true
-			}
-
-			2 -> {
-				if (type == ReturnLoadingType.ALUMINUM) {
-					loadingAluminumWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
-				} else {
-					loadingIronWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
-				}
-				saveLoadingScreenToCurrentTrip()
-				renderLoadingTable()
-				triggerAutoSaveDebounced()
-				true
-			}
-
-			else -> false
-		}
-	}
-	popup.show()
+	showMenuCardPopup(
+		anchor = anchor,
+		title = title,
+		subtitle = "选择单包重量或过磅总重量",
+		sections = listOf(
+			MenuCardSection(
+				items = listOf(
+					MenuCardItem(
+						"单包重量",
+						onClick = {
+							if (isAluminum) {
+								loadingAluminumWeightMode = LoadingWeightMode.SINGLE_PACKAGE
+							} else {
+								loadingIronWeightMode = LoadingWeightMode.SINGLE_PACKAGE
+							}
+							saveLoadingScreenToCurrentTrip()
+							renderLoadingTable()
+							triggerAutoSaveDebounced()
+						},
+						selected = currentMode == LoadingWeightMode.SINGLE_PACKAGE
+					),
+					MenuCardItem(
+						"过磅总重量",
+						onClick = {
+							if (isAluminum) {
+								loadingAluminumWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
+							} else {
+								loadingIronWeightMode = LoadingWeightMode.WEIGHBRIDGE_TOTAL
+							}
+							saveLoadingScreenToCurrentTrip()
+							renderLoadingTable()
+							triggerAutoSaveDebounced()
+						},
+						selected = currentMode == LoadingWeightMode.WEIGHBRIDGE_TOTAL
+					)
+				)
+			)
+		)
+	)
 }
 
 
@@ -542,38 +541,6 @@ fun MainActivity.addLoadingMaterial(type: ReturnLoadingType, materialName: Strin
 }
 
 
-fun MainActivity.showIronMaterialDialog() {
-	val items = listOf(
-		"背楞", "吊架", "单支撑", "销钉", "销片", "销钉销片", "四方垫片", "对拉螺母", "对拉螺杆",
-		"斜撑", "圆管", "调节底座", "码仔", "K板螺丝", "T字螺杆", "放线盒", "上料箱", "泵管盒",
-		"方通扣", "回型钩", "凳子", "拉片小斜撑", "背楞接头", "铁钩铁锤", "其他铁件"
-	)
-
-	AlertDialog.Builder(this)
-		.setTitle("铁物料")
-		.setItems(items.toTypedArray()) { _, which ->
-			val name = items[which]
-			when (name) {
-				"单支撑", "对拉螺杆", "斜撑", "圆管" -> {
-					NumberInputDialogHelper(
-						context = this,
-						titleText = "请输入长度",
-						initialValue = "",
-						allowDecimal = false
-					) { input ->
-						val finalName = if (input.isBlank()) name else "${name}${input}mm"
-						applyLoadingMaterialSelection(ReturnLoadingType.IRON, finalName)
-
-					}.show()
-				}
-
-				else -> applyLoadingMaterialSelection(ReturnLoadingType.IRON, name)
-
-			}
-		}
-		.setNegativeButton("取消", null)
-		.show()
-}
 
 fun MainActivity.deductAluminumBoxWeightForRow(rowIndex: Int) {
 	val row = loadingIronRows.getOrNull(rowIndex) ?: run {
@@ -665,16 +632,33 @@ fun MainActivity.showVehiclePlateInputDialog(initialValue: String, onConfirm: (S
 		setSelection(text.length)
 		hint = "请输入运输车牌号"
 		isSingleLine = true
+		setPadding(dp(12), dp(10), dp(12), dp(10))
+		background = createCellBackground(0xFFF8F5FF.toInt(), 0xFFE4DAFF.toInt(), 1, 12f)
 	}
 
-	AlertDialog.Builder(this)
-		.setTitle("运输车牌号")
-		.setView(input)
-		.setNegativeButton("取消", null)
-		.setPositiveButton("确定") { _, _ ->
-			onConfirm(input.text.toString().trim())
-		}
-		.show()
+	createCardDialog(
+		title = "运输车牌号",
+		subtitle = "填写后会立即更新当前车次信息"
+	) { dlg ->
+		addView(createDialogSectionTitle("车牌号码"))
+		addView(input)
+		addView(
+			createDialogActionRow(
+				dialog = dlg,
+				confirmText = "确定",
+				onConfirm = {
+					onConfirm(input.text.toString().trim())
+					dlg.dismiss()
+				}
+			),
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}.show()
 }
 
 fun MainActivity.showLoadingDatePickerDialog(initialValue: String, onConfirm: (String) -> Unit) {
@@ -695,12 +679,6 @@ fun MainActivity.showLoadingDatePickerDialog(initialValue: String, onConfirm: (S
 		initialDay = now.get(java.util.Calendar.DAY_OF_MONTH)
 	}
 
-	val container = LinearLayout(this).apply {
-		orientation = LinearLayout.HORIZONTAL
-		gravity = Gravity.CENTER
-		setPadding(dp(16), dp(8), dp(16), dp(8))
-	}
-
 	fun buildPicker(min: Int, max: Int, value: Int): NumberPicker {
 		return NumberPicker(this).apply {
 			minValue = min
@@ -708,6 +686,7 @@ fun MainActivity.showLoadingDatePickerDialog(initialValue: String, onConfirm: (S
 			this.value = value.coerceIn(min, max)
 			descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
 			wrapSelectorWheel = false
+			setBackgroundColor(0xFFF8F5FF.toInt())
 		}
 	}
 
@@ -715,151 +694,63 @@ fun MainActivity.showLoadingDatePickerDialog(initialValue: String, onConfirm: (S
 	val monthPicker = buildPicker(1, 12, initialMonth)
 	val dayPicker = buildPicker(1, 31, initialDay)
 
-	container.addView(yearPicker)
-	container.addView(TextView(this).apply { text = "年"; setPadding(dp(4), 0, dp(8), 0) })
-	container.addView(monthPicker)
-	container.addView(TextView(this).apply { text = "月"; setPadding(dp(4), 0, dp(8), 0) })
-	container.addView(dayPicker)
-	container.addView(TextView(this).apply { text = "日"; setPadding(dp(4), 0, 0, 0) })
+	val pickerRow = LinearLayout(this).apply {
+		orientation = LinearLayout.HORIZONTAL
+		gravity = Gravity.CENTER
+		setPadding(dp(8), dp(8), dp(8), dp(8))
+		background = createCellBackground(0xFFF8F5FF.toInt(), 0xFFE4DAFF.toInt(), 1, 12f)
+		addView(yearPicker)
+		addView(TextView(this@showLoadingDatePickerDialog).apply {
+			text = "年"
+			setPadding(dp(4), 0, dp(8), 0)
+			setTextColor(0xFF6C56B3.toInt())
+		})
+		addView(monthPicker)
+		addView(TextView(this@showLoadingDatePickerDialog).apply {
+			text = "月"
+			setPadding(dp(4), 0, dp(8), 0)
+			setTextColor(0xFF6C56B3.toInt())
+		})
+		addView(dayPicker)
+		addView(TextView(this@showLoadingDatePickerDialog).apply {
+			text = "日"
+			setPadding(dp(4), 0, 0, 0)
+			setTextColor(0xFF6C56B3.toInt())
+		})
+	}
 
-	AlertDialog.Builder(this)
-		.setTitle("装车时间")
-		.setView(container)
-		.setNegativeButton("取消", null)
-		.setPositiveButton("确定") { _, _ ->
-			val date = String.format(
-				Locale.getDefault(),
-				"%04d-%02d-%02d",
-				yearPicker.value,
-				monthPicker.value,
-				dayPicker.value
-			)
-			onConfirm(date)
-		}
-		.show()
+	createCardDialog(
+		title = "装车时间",
+		subtitle = "选择后会立即更新当前车次信息"
+	) { dlg ->
+		addView(createDialogSectionTitle("日期选择"))
+		addView(pickerRow)
+		addView(
+			createDialogActionRow(
+				dialog = dlg,
+				confirmText = "确定",
+				onConfirm = {
+					val date = String.format(
+						Locale.getDefault(),
+						"%04d-%02d-%02d",
+						yearPicker.value,
+						monthPicker.value,
+						dayPicker.value
+					)
+					onConfirm(date)
+					dlg.dismiss()
+				}
+			),
+			LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT,
+				LinearLayout.LayoutParams.WRAP_CONTENT
+			).apply {
+				topMargin = dp(16)
+			}
+		)
+	}.show()
 }
 
-fun MainActivity.showVehicleInfoDialog() {
-	val container = LinearLayout(this).apply {
-		orientation = LinearLayout.VERTICAL
-		setPadding(dp(18), dp(12), dp(18), dp(4))
-	}
-
-	fun buildItem(title: String): Pair<LinearLayout, TextView> {
-		val row = LinearLayout(this).apply {
-			orientation = LinearLayout.HORIZONTAL
-			gravity = Gravity.CENTER_VERTICAL
-			setPadding(0, dp(8), 0, dp(8))
-		}
-
-		val label = TextView(this).apply {
-			text = title
-			textSize = 15f
-			setTextColor(0xFF222222.toInt())
-			layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-		}
-
-		val value = TextView(this).apply {
-			textSize = 15f
-			setTextColor(0xFF4E3D91.toInt())
-			gravity = Gravity.END
-			layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-		}
-
-		row.addView(label)
-		row.addView(value)
-		return row to value
-	}
-
-	val (rowPlate, tvPlate) = buildItem("运输车牌号")
-	val (rowLoadingDate, tvLoadingDate) = buildItem("装车时间")
-	val (rowGross, tvGross) = buildItem("装车毛重")
-	val (rowTare, tvTare) = buildItem("车辆皮重")
-	val (rowMidAl, tvMidAl) = buildItem("中途铝重")
-	val (rowMidIron, tvMidIron) = buildItem("中途铁重")
-	val (rowWood, tvWood) = buildItem("木方估算")
-	val (rowNet, tvNet) = buildItem("装车净重")
-	val (rowAl, tvAl) = buildItem("铝模重量")
-	val (rowIron, tvIron) = buildItem("铁件重量")
-
-	container.addView(rowPlate)
-	container.addView(rowLoadingDate)
-	container.addView(rowGross)
-	container.addView(rowTare)
-	container.addView(rowMidAl)
-	container.addView(rowMidIron)
-	container.addView(rowWood)
-	container.addView(rowNet)
-	container.addView(rowAl)
-	container.addView(rowIron)
-
-	fun refresh() {
-		tvPlate.text = vehicleInfo.vehiclePlateNumber.ifBlank { "点击输入" }
-		tvLoadingDate.text = vehicleInfo.loadingDate.ifBlank { "点击选择" }
-		tvGross.text = vehicleInfo.grossWeight.ifBlank { "点击输入" }
-		tvTare.text = vehicleInfo.tareWeight.ifBlank { "点击输入" }
-		tvMidAl.text =
-			if (vehicleInfo.middleIronWeight.isNotBlank()) "请先删除另一个中途数据"
-			else vehicleInfo.middleAluminumWeight.ifBlank { "点击输入" }
-
-		tvMidIron.text =
-			if (vehicleInfo.middleAluminumWeight.isNotBlank()) "请先删除另一个中途数据"
-			else vehicleInfo.middleIronWeight.ifBlank { "点击输入" }
-
-		tvWood.text = vehicleInfo.woodEstimate.ifBlank { "点击输入" }
-		tvNet.text = formatLoadingNumber(vehicleInfo.netWeight())
-		tvAl.text = formatLoadingNumber(vehicleInfo.aluminumWeight())
-		tvIron.text = formatLoadingNumber(vehicleInfo.ironWeight())
-
-		renderLoadingTable()
-	}
-
-	fun input(title: String, setter: (String) -> Unit) {
-		NumberInputDialogHelper(this, title, "", true) {
-			setter(it)
-			refresh()
-			triggerAutoSaveDebounced()
-		}.show()
-	}
-
-	rowPlate.setOnClickListener {
-		showVehiclePlateInputDialog(vehicleInfo.vehiclePlateNumber) {
-			vehicleInfo.vehiclePlateNumber = it
-			refresh()
-			triggerAutoSaveDebounced()
-		}
-	}
-
-	rowLoadingDate.setOnClickListener {
-		showLoadingDatePickerDialog(vehicleInfo.loadingDate) {
-			vehicleInfo.loadingDate = it
-			refresh()
-			triggerAutoSaveDebounced()
-		}
-	}
-
-	rowGross.setOnClickListener { input("装车毛重") { vehicleInfo.grossWeight = it } }
-	rowTare.setOnClickListener { input("车辆皮重") { vehicleInfo.tareWeight = it } }
-	rowWood.setOnClickListener { input("木方估算") { vehicleInfo.woodEstimate = it } }
-
-	rowMidAl.setOnClickListener {
-		if (vehicleInfo.middleIronWeight.isNotBlank()) return@setOnClickListener
-		input("中途铝重") { vehicleInfo.middleAluminumWeight = it }
-	}
-
-	rowMidIron.setOnClickListener {
-		if (vehicleInfo.middleAluminumWeight.isNotBlank()) return@setOnClickListener
-		input("中途铁重") { vehicleInfo.middleIronWeight = it }
-	}
-
-	refresh()
-
-	AlertDialog.Builder(this)
-		.setTitle("过磅信息")
-		.setView(container)
-		.setPositiveButton("关闭", null)
-		.show()
-}
 
 
 fun MainActivity.appendLoadingValue(value: String) {

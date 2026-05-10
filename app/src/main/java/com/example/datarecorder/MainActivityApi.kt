@@ -25,15 +25,42 @@ fun MainActivity.loadServerProjectList() {
 					return@launch
 				}
 
-				val items = list.map { item ->
-					"${item.projectName ?: "-"}    ${item.latestTime ?: ""}"
-				}.toTypedArray()
+				val content = android.widget.LinearLayout(activity).apply {
+					orientation = android.widget.LinearLayout.VERTICAL
+					list.forEachIndexed { index, item ->
+						addView(
+							createDialogListItem(
+								label = item.projectName ?: "-",
+								subtitle = item.latestTime?.takeIf { it.isNotBlank() } ?: "暂无最近时间",
+								accent = index == 0
+							),
+							android.widget.LinearLayout.LayoutParams(
+								android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+								android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+							).apply {
+								if (index > 0) topMargin = dp(8)
+							}
+						)
+					}
+				}
 
-				AlertDialog.Builder(activity)
-					.setTitle("服务器项目列表")
-					.setItems(items, null)
-					.setPositiveButton("确定", null)
-					.show()
+				createCardDialog(
+					title = "服务器项目列表",
+					subtitle = "仅展示服务器最近上传的项目记录"
+				) { dlg ->
+					addView(wrapDialogScroll(content))
+					addView(
+						createDialogActionButton("关闭", primary = false) {
+							dlg.dismiss()
+						},
+						android.widget.LinearLayout.LayoutParams(
+							android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+							dp(42)
+						).apply {
+							topMargin = dp(16)
+						}
+					)
+				}.show()
 			} else {
 				toast(response.message ?: "获取服务器项目失败")
 			}
@@ -61,11 +88,11 @@ fun MainActivity.loadServerStatSummary() {
 					appendLine("本年：${data.yearCount ?: 0}")
 				}
 
-				AlertDialog.Builder(activity)
-					.setTitle("服务器统计")
-					.setMessage(msg)
-					.setPositiveButton("确定", null)
-					.show()
+				showInfoCardDialog(
+					title = "服务器统计",
+					message = msg.trim(),
+					subtitle = "当前账号的服务器侧汇总数据"
+				)
 			} else {
 				toast(response.message ?: "获取统计失败")
 			}
