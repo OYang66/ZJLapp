@@ -25,7 +25,7 @@ val sparkApiSecret = localOrEnv("SPARK_API_SECRET", "XUNFEI_SPARK_API_SECRET")
 plugins {
 	id("com.android.application")
 	id("org.jetbrains.kotlin.android")
-	id("org.jetbrains.kotlin.kapt")
+	id("com.google.devtools.ksp")
 }
 
 android {
@@ -36,8 +36,8 @@ android {
 		applicationId = "com.example.datarecorder"
 		minSdk = 26
 		targetSdk = 34
-		versionCode = 26
-		versionName = "2.6.0"
+		versionCode = 27
+		versionName = "2.7.0"
 		buildConfigField("String", "SPARK_APP_ID", buildConfigString(sparkAppId))
 		buildConfigField("String", "SPARK_API_KEY", buildConfigString(sparkApiKey))
 		buildConfigField("String", "SPARK_API_SECRET", buildConfigString(sparkApiSecret))
@@ -76,7 +76,7 @@ dependencies {
 	implementation("androidx.cardview:cardview:1.0.0")
 	implementation("androidx.room:room-runtime:2.6.1")
 	implementation("androidx.room:room-ktx:2.6.1")
-	kapt("androidx.room:room-compiler:2.6.1")
+	ksp("androidx.room:room-compiler:2.6.1")
 	implementation("com.squareup.retrofit2:retrofit:2.11.0")
 	implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 	implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
@@ -92,8 +92,4 @@ dependencies {
 	implementation("commons-io:commons-io:2.15.1")
 	implementation("com.github.virtuald:curvesapi:1.08")
 
-}
-
-kapt {
-	correctErrorTypes = true
 }

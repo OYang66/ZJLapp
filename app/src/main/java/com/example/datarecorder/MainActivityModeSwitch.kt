@@ -39,6 +39,8 @@ fun MainActivity.switchMode(mode: ModeType) {
     qualityModeContainer.visibility = if (mode == ModeType.QUALITY_FEEDBACK) View.VISIBLE else View.GONE
 
     btnModeToggle.text = "切换模式"
+    updateConnectCodeButtonVisibility()
+    refreshSubDisplaySyncState(forceRestartPolling = true)
 
     when (mode) {
         ModeType.STANDARD -> {

@@ -48,6 +48,14 @@ class ProjectRepository(private val dao: ProjectDao) {
         return dao.getById(id)
     }
 
+    suspend fun getProjectByName(name: String): ProjectEntity? {
+        return dao.getByName(name.trim())
+    }
+
+    suspend fun getProjectsByName(name: String): List<ProjectEntity> {
+        return dao.getByNameList(name.trim())
+    }
+
     suspend fun deleteProject(project: ProjectEntity) {
         dao.delete(project)
     }

@@ -26,11 +26,36 @@ import android.text.TextWatcher
 
 
 private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
+    val safeProjectName = projectName.trim()
+    if (safeProjectName.isBlank()) {
+        toast("项目名称无效")
+        return
+    }
+
+    if (currentProjectId > 0L && currentProjectName == safeProjectName) {
+        showInfoCardDialog("项目已存在", "当前项目“$safeProjectName”已经打开，原有数据已保留。")
+        return
+    }
+
+    val existingProjects = withContext(Dispatchers.IO) {
+        repository.getProjectsByName(safeProjectName)
+    }
+    if (existingProjects.isNotEmpty()) {
+        val previousProjectId = currentProjectId
+        val existingProject = switchToExistingProjectByName(safeProjectName)
+        if (existingProject != null && currentProjectId == existingProject.id && previousProjectId != existingProject.id) {
+            showInfoCardDialog("项目已存在", "项目“$safeProjectName”已存在，已切换到现有项目，原有数据已保留。")
+        } else {
+            showInfoCardDialog("项目已存在", "本地已存在同名项目，已取消本次同步，原有数据不会被覆盖。")
+        }
+        return
+    }
+
     if (currentProjectId > 0L) {
         saveCurrentProjectContentNow()
     }
 
-    val buildingResponse = RetrofitClient.api.getServerProjectBuildings(projectName)
+    val buildingResponse = RetrofitClient.api.getServerProjectBuildings(safeProjectName)
     if (buildingResponse.code != 200 || buildingResponse.data == null) {
         toast(buildingResponse.message ?: "获取楼栋失败")
         return
@@ -47,23 +72,10 @@ private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
         .distinct()
 
     val finalBuildings: List<String> =
-        if (serverBuildings.isEmpty()) listOf("1#") else serverBuildings
+        if (serverBuildings.isEmpty()) listOf("1号楼") else serverBuildings
 
-    // 只按项目名称找本地项目，不再按项目+楼栋创建多个项目
-    val allLocalProjects = withContext(Dispatchers.IO) {
-        repository.getAllProjects()
-    }
-
-    var targetProject: ProjectEntity? = allLocalProjects.firstOrNull { project ->
-        project.name == projectName
-    }
-
-    val targetProjectId: Long = if (targetProject == null) {
-        withContext(Dispatchers.IO) {
-            repository.createProject(projectName, finalBuildings.first())
-        }
-    } else {
-        targetProject.id
+    val targetProjectId = withContext(Dispatchers.IO) {
+        repository.createProject(safeProjectName, finalBuildings.first())
     }
 
     val latestProject = withContext(Dispatchers.IO) {
@@ -73,8 +85,9 @@ private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
         return
     }
 
-    // 先切到该项目
-    switchProjectById(latestProject.id)
+    if (currentProjectId != latestProject.id) {
+        switchProjectById(latestProject.id)
+    }
 
     // 把服务器楼栋同步到当前项目的楼栋Map里，只补充，不删除旧数据
     finalBuildings.forEach { buildingName ->
@@ -95,8 +108,9 @@ private suspend fun MainActivity.syncServerProjectToLocal(projectName: String) {
 
 // 把默认第1包/第1车立即保存回数据库
     saveCurrentProjectContentNow()
+    scheduleSubDisplaySnapshotSync()
 
-    toast("已同步项目：$projectName")
+    toast("已同步项目：$safeProjectName")
 
 }
 

@@ -951,112 +951,120 @@ fun MainActivity.deserializePackageFastContent(content: String) {
 
 	if (content.isBlank()) return
 
-	if (!content.contains("#PACKAGE=")) {
-		if (content.trim().startsWith("#")) {
+	try {
+		if (!content.contains("#PACKAGE=")) {
+			if (content.trim().startsWith("#")) {
+				return
+			}
+
+			val oldRows = deserializeFastContentOld(content)
+			if (oldRows.isNotEmpty()) {
+				val defaultPackage = "第1包"
+				packageFastRowsMap[defaultPackage] = oldRows.toMutableList()
+				packageCurrentFastRowMap[defaultPackage] = FastRow()
+				packageDateMap[defaultPackage] = getTodayPackageDate()
+				currentPackageName = defaultPackage
+			}
 			return
 		}
 
-		val oldRows = deserializeFastContentOld(content)
-		if (oldRows.isNotEmpty()) {
-			val defaultPackage = "第1包"
-			packageFastRowsMap[defaultPackage] = oldRows.toMutableList()
-			packageCurrentFastRowMap[defaultPackage] = FastRow()
-			packageDateMap[defaultPackage] = getTodayPackageDate()
-			currentPackageName = defaultPackage
-		}
-		return
-	}
+		val lines = content.replace("\r\n", "\n").split("\n")
+		var packageName = ""
+		var packageDate = ""
+		var inRows = false
+		var inCurrentRow = false
+		var rows = mutableListOf<FastRow>()
 
-
-	val lines = content.replace("\r\n", "\n").split("\n")
-	var packageName = ""
-	var packageDate = ""
-	var inRows = false
-	var inCurrentRow = false
-	var rows = mutableListOf<FastRow>()
-
-	lines.forEach { line ->
-		when {
-			line.startsWith("#CURRENT_PACKAGE=") -> {
-				currentPackageName = line.removePrefix("#CURRENT_PACKAGE=").trim()
-			}
-
-			line.startsWith("#PACKAGE=") -> {
-				if (packageName.isNotBlank()) {
-					packageFastRowsMap[packageName] = rows
-					packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
-					packageDateMap[packageName] =
-						if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+		lines.forEach { line ->
+			when {
+				line.startsWith("#CURRENT_PACKAGE=") -> {
+					currentPackageName = line.removePrefix("#CURRENT_PACKAGE=").trim()
 				}
 
-				packageName = line.removePrefix("#PACKAGE=").trim()
-				packageDate = ""
-				rows = mutableListOf()
-				inRows = false
-				inCurrentRow = false
-			}
+				line.startsWith("#PACKAGE=") -> {
+					if (packageName.isNotBlank()) {
+						packageFastRowsMap[packageName] = rows
+						packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
+						packageDateMap[packageName] =
+							if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					}
 
-			line.startsWith("#PACKAGE_DATE=") -> {
-				packageDate = line.removePrefix("#PACKAGE_DATE=").trim()
-			}
-
-			line == "#ROWS" -> {
-				inRows = true
-				inCurrentRow = false
-			}
-
-			line == "#CURRENT_ROW" -> {
-				inRows = false
-				inCurrentRow = true
-			}
-
-			line == "#END_PACKAGE" -> {
-				if (packageName.isNotBlank()) {
-					packageFastRowsMap[packageName] = rows
-					packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
-					packageDateMap[packageName] =
-						if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					packageName = line.removePrefix("#PACKAGE=").trim()
+					packageDate = ""
+					rows = mutableListOf()
+					inRows = false
+					inCurrentRow = false
 				}
-				packageName = ""
-				packageDate = ""
-				inRows = false
-				inCurrentRow = false
-			}
 
-			inRows && line.isNotBlank() -> {
-				val parts = line.split("\t")
-				rows.add(
-					FastRow(
+				line.startsWith("#PACKAGE_DATE=") -> {
+					packageDate = line.removePrefix("#PACKAGE_DATE=").trim()
+				}
+
+				line == "#ROWS" -> {
+					inRows = true
+					inCurrentRow = false
+				}
+
+				line == "#CURRENT_ROW" -> {
+					inRows = false
+					inCurrentRow = true
+				}
+
+				line == "#END_PACKAGE" -> {
+					if (packageName.isNotBlank()) {
+						packageFastRowsMap[packageName] = rows
+						packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
+						packageDateMap[packageName] =
+							if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					}
+					packageName = ""
+					packageDate = ""
+					inRows = false
+					inCurrentRow = false
+				}
+
+				inRows && line.isNotBlank() -> {
+					val parts = line.split("\t")
+					rows.add(
+						FastRow(
+							width = parts.getOrNull(0).orEmpty(),
+							model = parts.getOrNull(1).orEmpty(),
+							length = parts.getOrNull(2).orEmpty(),
+							quantity = parts.getOrNull(3).orEmpty()
+						)
+					)
+				}
+
+				inCurrentRow -> {
+					val parts = line.split("\t")
+					packageCurrentFastRowMap[packageName] = FastRow(
 						width = parts.getOrNull(0).orEmpty(),
 						model = parts.getOrNull(1).orEmpty(),
 						length = parts.getOrNull(2).orEmpty(),
 						quantity = parts.getOrNull(3).orEmpty()
 					)
-				)
-			}
-
-			inCurrentRow -> {
-				val parts = line.split("\t")
-				packageCurrentFastRowMap[packageName] = FastRow(
-					width = parts.getOrNull(0).orEmpty(),
-					model = parts.getOrNull(1).orEmpty(),
-					length = parts.getOrNull(2).orEmpty(),
-					quantity = parts.getOrNull(3).orEmpty()
-				)
-				inCurrentRow = false
+					inCurrentRow = false
+				}
 			}
 		}
-	}
 
-	if (packageName.isNotBlank()) {
-		packageFastRowsMap[packageName] = rows
-		packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
-		packageDateMap[packageName] =
-			if (packageDate.isBlank()) getTodayPackageDate() else packageDate
-	}
+		if (packageName.isNotBlank()) {
+			packageFastRowsMap[packageName] = rows
+			packageCurrentFastRowMap.putIfAbsent(packageName, FastRow())
+			packageDateMap[packageName] =
+				if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+		}
 
-	if (currentPackageName.isBlank()) {
-		currentPackageName = packageFastRowsMap.keys.firstOrNull().orEmpty()
+		if (currentPackageName.isBlank()) {
+			currentPackageName = packageFastRowsMap.keys.firstOrNull().orEmpty()
+		}
+	} catch (e: Exception) {
+		e.printStackTrace()
+		packageFastRowsMap.clear()
+		packageCurrentFastRowMap.clear()
+		if (currentBuildingName.isNotBlank()) {
+			buildingFastContentMap[currentBuildingName] = ""
+		}
 	}
 }
 

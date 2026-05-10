@@ -11,6 +11,7 @@ object SessionManager {
     private const val KEY_LOGOUT_REASON = "logout_reason"
     private const val KEY_ONLINE_STATUS = "online_status"
     private const val KEY_LAST_ACTIVE_TIME = "last_active_time"
+    private const val KEY_SUB_DISPLAY_CODE = "sub_display_code"
 
     private const val KEY_REMEMBER = "remember_account_password"
     private const val KEY_SAVED_USERNAME = "saved_username"
@@ -75,6 +76,23 @@ object SessionManager {
             .remove(KEY_USER_ID)
             .remove(KEY_ONLINE_STATUS)
             .remove(KEY_LAST_ACTIVE_TIME)
+            .remove(KEY_SUB_DISPLAY_CODE)
+            .apply()
+    }
+
+    fun saveSubDisplayConnection(context: Context, code: String) {
+        prefs(context).edit()
+            .putString(KEY_SUB_DISPLAY_CODE, code)
+            .apply()
+    }
+
+    fun getSubDisplayCode(context: Context): String {
+        return prefs(context).getString(KEY_SUB_DISPLAY_CODE, "") ?: ""
+    }
+
+    fun clearSubDisplayConnection(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_SUB_DISPLAY_CODE)
             .apply()
     }
 

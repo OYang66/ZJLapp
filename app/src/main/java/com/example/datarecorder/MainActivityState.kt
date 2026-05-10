@@ -106,7 +106,11 @@ fun MainActivity.deserializeQualityFeedbackContent(content: String) {
 		} catch (_: Exception) {
 			QualityFeedbackField.MATERIAL_TYPE
 		}
-	} catch (_: Exception) {
+	} catch (e: Exception) {
+		e.printStackTrace()
+		if (currentBuildingName.isNotBlank()) {
+			buildingQualityContentMap[currentBuildingName] = ""
+		}
 	}
 }
 
@@ -227,6 +231,9 @@ fun MainActivity.loadPackageToScreen(packageName: String) {
 
 	if (currentModeType == ModeType.STANDARD || currentModeType == ModeType.FAST) {
 		updateDisplayTable()
+	}
+	if (currentModeType == ModeType.FAST) {
+		scheduleSubDisplaySnapshotSync()
 	}
 }
 
@@ -407,6 +414,9 @@ fun MainActivity.loadBuildingScopeToScreen(
 
 	updatePackageButtonText()
 	switchMode(currentModeType)
+	if (currentModeType == ModeType.FAST) {
+		scheduleSubDisplaySnapshotSync()
+	}
 }
 
 

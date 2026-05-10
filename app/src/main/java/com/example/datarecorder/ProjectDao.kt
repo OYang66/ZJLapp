@@ -23,4 +23,10 @@ interface ProjectDao {
 
     @Query("SELECT * FROM projects WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ProjectEntity?
+
+    @Query("SELECT * FROM projects WHERE name = :name ORDER BY id ASC LIMIT 1")
+    suspend fun getByName(name: String): ProjectEntity?
+
+    @Query("SELECT * FROM projects WHERE name = :name ORDER BY id ASC")
+    suspend fun getByNameList(name: String): List<ProjectEntity>
 }

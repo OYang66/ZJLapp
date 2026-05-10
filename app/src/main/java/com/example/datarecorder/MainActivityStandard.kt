@@ -271,110 +271,118 @@ fun MainActivity.deserializePackageStandardContent(content: String) {
 
 	if (content.isBlank()) return
 
-	if (!content.contains("#PACKAGE=")) {
-		if (content.trim().startsWith("#")) {
+	try {
+		if (!content.contains("#PACKAGE=")) {
+			if (content.trim().startsWith("#")) {
+				return
+			}
+
+			val oldRows = deserializeStandardContentOld(content)
+			if (oldRows.isNotEmpty()) {
+				val defaultPackage = "第1包"
+				packageStandardRowsMap[defaultPackage] = oldRows.toMutableList()
+				packageCurrentStandardRowMap[defaultPackage] = StandardRow()
+				packageDateMap[defaultPackage] = getTodayPackageDate()
+				currentPackageName = defaultPackage
+			}
 			return
 		}
 
-		val oldRows = deserializeStandardContentOld(content)
-		if (oldRows.isNotEmpty()) {
-			val defaultPackage = "第1包"
-			packageStandardRowsMap[defaultPackage] = oldRows.toMutableList()
-			packageCurrentStandardRowMap[defaultPackage] = StandardRow()
-			packageDateMap[defaultPackage] = getTodayPackageDate()
-			currentPackageName = defaultPackage
-		}
-		return
-	}
+		val lines = content.replace("\r\n", "\n").split("\n")
+		var packageName = ""
+		var packageDate = ""
+		var inRows = false
+		var inCurrentRow = false
+		var rows = mutableListOf<StandardRow>()
 
-
-	val lines = content.replace("\r\n", "\n").split("\n")
-	var packageName = ""
-	var packageDate = ""
-	var inRows = false
-	var inCurrentRow = false
-	var rows = mutableListOf<StandardRow>()
-
-	lines.forEach { line ->
-		when {
-			line.startsWith("#CURRENT_PACKAGE=") -> {
-				currentPackageName = line.removePrefix("#CURRENT_PACKAGE=").trim()
-			}
-
-			line.startsWith("#PACKAGE=") -> {
-				if (packageName.isNotBlank()) {
-					packageStandardRowsMap[packageName] = rows
-					packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
-					packageDateMap[packageName] =
-						if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+		lines.forEach { line ->
+			when {
+				line.startsWith("#CURRENT_PACKAGE=") -> {
+					currentPackageName = line.removePrefix("#CURRENT_PACKAGE=").trim()
 				}
 
-				packageName = line.removePrefix("#PACKAGE=").trim()
-				packageDate = ""
-				rows = mutableListOf()
-				inRows = false
-				inCurrentRow = false
-			}
+				line.startsWith("#PACKAGE=") -> {
+					if (packageName.isNotBlank()) {
+						packageStandardRowsMap[packageName] = rows
+						packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+						packageDateMap[packageName] =
+							if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					}
 
-			line.startsWith("#PACKAGE_DATE=") -> {
-				packageDate = line.removePrefix("#PACKAGE_DATE=").trim()
-			}
-
-			line == "#ROWS" -> {
-				inRows = true
-				inCurrentRow = false
-			}
-
-			line == "#CURRENT_ROW" -> {
-				inRows = false
-				inCurrentRow = true
-			}
-
-			line == "#END_PACKAGE" -> {
-				if (packageName.isNotBlank()) {
-					packageStandardRowsMap[packageName] = rows
-					packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
-					packageDateMap[packageName] =
-						if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					packageName = line.removePrefix("#PACKAGE=").trim()
+					packageDate = ""
+					rows = mutableListOf()
+					inRows = false
+					inCurrentRow = false
 				}
-				packageName = ""
-				packageDate = ""
-				inRows = false
-				inCurrentRow = false
-			}
 
-			inRows && line.isNotBlank() -> {
-				val parts = line.split("\t")
-				rows.add(
-					StandardRow(
+				line.startsWith("#PACKAGE_DATE=") -> {
+					packageDate = line.removePrefix("#PACKAGE_DATE=").trim()
+				}
+
+				line == "#ROWS" -> {
+					inRows = true
+					inCurrentRow = false
+				}
+
+				line == "#CURRENT_ROW" -> {
+					inRows = false
+					inCurrentRow = true
+				}
+
+				line == "#END_PACKAGE" -> {
+					if (packageName.isNotBlank()) {
+						packageStandardRowsMap[packageName] = rows
+						packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+						packageDateMap[packageName] =
+							if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+					}
+					packageName = ""
+					packageDate = ""
+					inRows = false
+					inCurrentRow = false
+				}
+
+				inRows && line.isNotBlank() -> {
+					val parts = line.split("\t")
+					rows.add(
+						StandardRow(
+							installNo = parts.getOrNull(0).orEmpty(),
+							model = parts.getOrNull(1).orEmpty(),
+							quantity = parts.getOrNull(2).orEmpty()
+						)
+					)
+				}
+
+				inCurrentRow -> {
+					val parts = line.split("\t")
+					packageCurrentStandardRowMap[packageName] = StandardRow(
 						installNo = parts.getOrNull(0).orEmpty(),
 						model = parts.getOrNull(1).orEmpty(),
 						quantity = parts.getOrNull(2).orEmpty()
 					)
-				)
-			}
-
-			inCurrentRow -> {
-				val parts = line.split("\t")
-				packageCurrentStandardRowMap[packageName] = StandardRow(
-					installNo = parts.getOrNull(0).orEmpty(),
-					model = parts.getOrNull(1).orEmpty(),
-					quantity = parts.getOrNull(2).orEmpty()
-				)
-				inCurrentRow = false
+					inCurrentRow = false
+				}
 			}
 		}
-	}
 
-	if (packageName.isNotBlank()) {
-		packageStandardRowsMap[packageName] = rows
-		packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
-		packageDateMap[packageName] =
-			if (packageDate.isBlank()) getTodayPackageDate() else packageDate
-	}
+		if (packageName.isNotBlank()) {
+			packageStandardRowsMap[packageName] = rows
+			packageCurrentStandardRowMap.putIfAbsent(packageName, StandardRow())
+			packageDateMap[packageName] =
+				if (packageDate.isBlank()) getTodayPackageDate() else packageDate
+		}
 
-	if (currentPackageName.isBlank()) {
-		currentPackageName = packageStandardRowsMap.keys.firstOrNull().orEmpty()
+		if (currentPackageName.isBlank()) {
+			currentPackageName = packageStandardRowsMap.keys.firstOrNull().orEmpty()
+		}
+	} catch (e: Exception) {
+		e.printStackTrace()
+		packageStandardRowsMap.clear()
+		packageCurrentStandardRowMap.clear()
+		if (currentBuildingName.isNotBlank()) {
+			buildingStandardContentMap[currentBuildingName] = ""
+		}
 	}
 }
 

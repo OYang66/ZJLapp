@@ -42,6 +42,7 @@ fun MainActivity.switchPackage(packageName: String) {
 
 	saveScreenDataToCurrentPackage()
 	loadPackageToScreen(packageName)
+	syncSubDisplaySnapshotNow()
 }
 
 fun MainActivity.showPackageMenuPopup(anchor: View) {
@@ -110,16 +111,69 @@ fun MainActivity.showPackageMenuPopup(anchor: View) {
 }
 
 suspend fun MainActivity.createProjectInternal(name: String, buildingName: String) {
+	val safeName = name.trim()
+	val safeBuildingName = buildingName.trim().ifBlank { "1号楼" }
+	if (safeName.isBlank()) {
+		toast("项目名称不能为空")
+		return
+	}
+
+	if (currentProjectId > 0L && currentProjectName == safeName) {
+		showInfoCardDialog("项目已存在", "当前项目“$safeName”已经打开，原有数据已保留。")
+		return
+	}
+
+	val existingProjects = withContext(Dispatchers.IO) {
+		repository.getProjectsByName(safeName)
+	}
+	if (existingProjects.isNotEmpty()) {
+		val previousProjectId = currentProjectId
+		val existingProject = switchToExistingProjectByName(safeName)
+		if (existingProject != null && currentProjectId == existingProject.id && previousProjectId != existingProject.id) {
+			showInfoCardDialog("项目已存在", "项目“$safeName”已存在，已切换到现有项目，原有数据已保留。")
+		} else {
+			showInfoCardDialog("项目已存在", "本地已存在同名项目，已取消本次新建，原有数据不会被覆盖。")
+		}
+		return
+	}
+
 	if (currentProjectId > 0L) {
 		saveCurrentProjectContentNow()
 	}
 
 	val newId = withContext(Dispatchers.IO) {
-		repository.createProject(name, buildingName)
+		repository.createProject(safeName, safeBuildingName)
 	}
 
 	switchProjectById(newId)
-	toast("已创建项目：$name")
+	toast("已创建项目：$safeName")
+}
+
+suspend fun MainActivity.switchToExistingProjectByName(name: String): ProjectEntity? {
+	val candidates = withContext(Dispatchers.IO) {
+		repository.getProjectsByName(name)
+	}
+	if (candidates.isEmpty()) {
+		return null
+	}
+
+	val currentMatch = candidates.firstOrNull { it.id == currentProjectId }
+	if (currentMatch != null) {
+		return currentMatch
+	}
+
+	for (candidate in candidates) {
+		try {
+			switchProjectById(candidate.id)
+			return withContext(Dispatchers.IO) {
+				repository.getProjectById(candidate.id)
+			} ?: candidate
+		} catch (e: Exception) {
+			e.printStackTrace()
+		}
+	}
+
+	return candidates.firstOrNull()
 }
 
 
@@ -426,7 +480,7 @@ fun MainActivity.parseBuildingScopedContent(
 		fallbackBuildingName: String
 ): Pair<String, LinkedHashMap<String, String>> {
 	val result = linkedMapOf<String, String>()
-	val defaultBuilding = if (fallbackBuildingName.isBlank()) "1#" else fallbackBuildingName
+	val defaultBuilding = if (fallbackBuildingName.isBlank()) "1号楼" else fallbackBuildingName
 
 	if (raw.isBlank()) {
 		result[defaultBuilding] = ""
@@ -522,37 +576,69 @@ fun MainActivity.switchProject(project: ProjectEntity) {
 
 suspend fun MainActivity.switchProjectById(projectId: Long) {
 	if (projectId <= 0L) return
+	if (projectId == currentProjectId && currentProjectId > 0L) return
+	if (isSwitchingProject) return
 
-	if (currentProjectId > 0L) {
-		saveCurrentProjectContentNow()
+	val previousProjectId = currentProjectId
+	cancelPendingAutoSave()
+	isSwitchingProject = true
+
+	try {
+		if (previousProjectId > 0L) {
+			saveCurrentProjectContentNow(previousProjectId, allowDuringProjectSwitch = true)
+		}
+
+		val latestProject = withContext(Dispatchers.IO) {
+			repository.getProjectById(projectId)
+		} ?: run {
+			toast("项目不存在或已删除")
+			return
+		}
+
+		clearStandardEditingState()
+		clearFastEditingState()
+		pendingReplaceStandardEditing = false
+		pendingReplaceFastEditing = false
+		pendingReplaceCurrentFastModel = false
+		pendingReplaceCurrentStandardModel = false
+
+		try {
+			rebuildPackageMapsFromProject(latestProject)
+		} catch (e: Exception) {
+			e.printStackTrace()
+			if (previousProjectId > 0L && previousProjectId != projectId) {
+				val previousProject = withContext(Dispatchers.IO) {
+					repository.getProjectById(previousProjectId)
+				}
+				if (previousProject != null) {
+					runCatching { rebuildPackageMapsFromProject(previousProject) }
+						.onFailure { it.printStackTrace() }
+					currentProjectId = previousProject.id
+					currentProjectName = previousProject.name
+					tvProjectName.text = "当前项目：$currentProjectName"
+				} else {
+					resetForNewProjectWithoutPackage()
+				}
+			} else if (previousProjectId <= 0L) {
+				resetForNewProjectWithoutPackage()
+			}
+			toast("项目数据异常，已取消切换")
+			throw IllegalStateException("项目数据异常，无法切换", e)
+		}
+
+		currentProjectId = latestProject.id
+		currentProjectName = latestProject.name
+		tvProjectName.text = "当前项目：$currentProjectName"
+
+		getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+			.edit()
+			.putLong("last_project_id", currentProjectId)
+			.apply()
+
+		syncSubDisplaySnapshotNow()
+	} finally {
+		isSwitchingProject = false
 	}
-
-	val latestProject = withContext(Dispatchers.IO) {
-		repository.getProjectById(projectId)
-	} ?: run {
-		toast("项目不存在或已删除")
-		return
-	}
-
-	currentProjectId = latestProject.id
-	currentProjectName = latestProject.name
-	currentBuildingName =
-		if (latestProject.buildingName.isBlank()) "1号楼" else latestProject.buildingName
-	tvProjectName.text = "当前项目：$currentProjectName"
-
-	getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-		.edit()
-		.putLong("last_project_id", currentProjectId)
-		.apply()
-
-	clearStandardEditingState()
-	clearFastEditingState()
-	pendingReplaceStandardEditing = false
-	pendingReplaceFastEditing = false
-	pendingReplaceCurrentFastModel = false
-	pendingReplaceCurrentStandardModel = false
-
-	rebuildPackageMapsFromProject(latestProject)
 }
 
 
@@ -561,7 +647,7 @@ fun MainActivity.switchBuilding(buildingName: String) {
 
 	saveCurrentBuildingScopeToMemory()
 	loadBuildingScopeToScreen(buildingName)
-	saveCurrentProjectContent()
+	syncSubDisplaySnapshotNow()
 }
 
 fun MainActivity.confirmDeleteCurrentBuilding() {
@@ -604,7 +690,7 @@ fun MainActivity.deleteCurrentBuilding() {
 	val nextBuilding = remain.getOrNull(oldIndex.coerceAtMost(remain.lastIndex)) ?: remain.first()
 
 	loadBuildingScopeToScreen(nextBuilding)
-	saveCurrentProjectContent()
+	syncSubDisplaySnapshotNow()
 	toast("已删除：$target")
 }
 
@@ -615,128 +701,146 @@ fun MainActivity.deserializeLoadingContent(content: String) {
 	loadingIronRows.clear()
 	currentLoadingTripName = ""
 	vehicleInfo = VehicleInfo()
+	loadingAluminumUsePackageCount = false
+	loadingAluminumWeightMode = LoadingWeightMode.UNSELECTED
+	loadingIronWeightMode = LoadingWeightMode.UNSELECTED
+	currentLoadingEditType = ReturnLoadingType.ALUMINUM
+	currentLoadingEditIndex = -1
+	currentLoadingField = ReturnLoadingField.MATERIAL_NAME
 
 	if (content.isBlank()) return
 
-	val root = JSONObject(content)
-	val restoredTripName = root.optString("currentLoadingTripName", "")
-	loadingAluminumUsePackageCount =
-		root.optString("loadingAluminumColumnMode", "PACKAGE_NO") == "COUNT"
-	loadingAluminumWeightMode = try {
-		LoadingWeightMode.valueOf(
-			root.optString("loadingAluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
-		)
-	} catch (_: Exception) {
-		LoadingWeightMode.SINGLE_PACKAGE
-	}
-
-	loadingIronWeightMode = try {
-		LoadingWeightMode.valueOf(
-			root.optString("loadingIronWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
-		)
-	} catch (_: Exception) {
-		LoadingWeightMode.SINGLE_PACKAGE
-	}
-
-
-	val trips = root.optJSONArray("trips") ?: JSONArray()
-	for (i in 0 until trips.length()) {
-		val obj = trips.getJSONObject(i)
-		val tripName = obj.optString("tripName", "")
-		if (tripName.isBlank()) continue
-
-		val trip = ReturnLoadingTripData(tripName = tripName)
-		trip.aluminumWeightMode = try {
+	try {
+		val root = JSONObject(content)
+		val restoredTripName = root.optString("currentLoadingTripName", "")
+		loadingAluminumUsePackageCount =
+			root.optString("loadingAluminumColumnMode", "PACKAGE_NO") == "COUNT"
+		loadingAluminumWeightMode = try {
 			LoadingWeightMode.valueOf(
-				obj.optString("aluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+				root.optString("loadingAluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
 			)
 		} catch (_: Exception) {
 			LoadingWeightMode.SINGLE_PACKAGE
 		}
 
-		trip.ironWeightMode = try {
+		loadingIronWeightMode = try {
 			LoadingWeightMode.valueOf(
-				obj.optString("ironWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+				root.optString("loadingIronWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
 			)
 		} catch (_: Exception) {
 			LoadingWeightMode.SINGLE_PACKAGE
 		}
 
+		val trips = root.optJSONArray("trips") ?: JSONArray()
+		for (i in 0 until trips.length()) {
+			val obj = trips.getJSONObject(i)
+			val tripName = obj.optString("tripName", "")
+			if (tripName.isBlank()) continue
 
-		val alArray = obj.optJSONArray("aluminumRows") ?: JSONArray()
-		for (j in 0 until alArray.length()) {
-			val rowObj = alArray.getJSONObject(j)
-			trip.aluminumRows.add(
-				ReturnLoadingRow(
-					type = ReturnLoadingType.ALUMINUM,
-					materialName = rowObj.optString("materialName"),
-					packageOrCount = rowObj.optString("packageOrCount"),
-					areaOrWeight = rowObj.optString("areaOrWeight"),
-					weight = rowObj.optString("weight"),
-					remark = rowObj.optString("remark")
+			val trip = ReturnLoadingTripData(tripName = tripName)
+			trip.aluminumWeightMode = try {
+				LoadingWeightMode.valueOf(
+					obj.optString("aluminumWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
 				)
+			} catch (_: Exception) {
+				LoadingWeightMode.SINGLE_PACKAGE
+			}
+
+			trip.ironWeightMode = try {
+				LoadingWeightMode.valueOf(
+					obj.optString("ironWeightMode", LoadingWeightMode.SINGLE_PACKAGE.name)
+				)
+			} catch (_: Exception) {
+				LoadingWeightMode.SINGLE_PACKAGE
+			}
+
+			val alArray = obj.optJSONArray("aluminumRows") ?: JSONArray()
+			for (j in 0 until alArray.length()) {
+				val rowObj = alArray.getJSONObject(j)
+				trip.aluminumRows.add(
+					ReturnLoadingRow(
+						type = ReturnLoadingType.ALUMINUM,
+						materialName = rowObj.optString("materialName"),
+						packageOrCount = rowObj.optString("packageOrCount"),
+						areaOrWeight = rowObj.optString("areaOrWeight"),
+						weight = rowObj.optString("weight"),
+						remark = rowObj.optString("remark")
+					)
+				)
+			}
+
+			val ironArray = obj.optJSONArray("ironRows") ?: JSONArray()
+			for (j in 0 until ironArray.length()) {
+				val rowObj = ironArray.getJSONObject(j)
+				trip.ironRows.add(
+					ReturnLoadingRow(
+						type = ReturnLoadingType.IRON,
+						materialName = rowObj.optString("materialName"),
+						packageOrCount = rowObj.optString("packageOrCount"),
+						areaOrWeight = rowObj.optString("areaOrWeight"),
+						weight = rowObj.optString("weight"),
+						remark = rowObj.optString("remark")
+					)
+				)
+			}
+
+			val vehicleObj = obj.optJSONObject("vehicleInfo") ?: JSONObject()
+			trip.vehicleInfo = VehicleInfo(
+				grossWeight = vehicleObj.optString("grossWeight"),
+				tareWeight = vehicleObj.optString("tareWeight"),
+				middleAluminumWeight = vehicleObj.optString("middleAluminumWeight"),
+				middleIronWeight = vehicleObj.optString("middleIronWeight"),
+				woodEstimate = vehicleObj.optString("woodEstimate"),
+				vehiclePlateNumber = vehicleObj.optString("vehiclePlateNumber"),
+				loadingDate = vehicleObj.optString("loadingDate")
 			)
+
+			loadingTripMap[tripName] = trip
 		}
 
-		val ironArray = obj.optJSONArray("ironRows") ?: JSONArray()
-		for (j in 0 until ironArray.length()) {
-			val rowObj = ironArray.getJSONObject(j)
-			trip.ironRows.add(
-				ReturnLoadingRow(
-					type = ReturnLoadingType.IRON,
-					materialName = rowObj.optString("materialName"),
-					packageOrCount = rowObj.optString("packageOrCount"),
-					areaOrWeight = rowObj.optString("areaOrWeight"),
-					weight = rowObj.optString("weight"),
-					remark = rowObj.optString("remark")
-				)
-			)
+		val targetTripName = when {
+			restoredTripName.isNotBlank() && loadingTripMap.containsKey(restoredTripName) -> restoredTripName
+			loadingTripMap.isNotEmpty() -> loadingTripMap.keys.first()
+			else -> ""
 		}
 
-		val vehicleObj = obj.optJSONObject("vehicleInfo") ?: JSONObject()
-		trip.vehicleInfo = VehicleInfo(
-			grossWeight = vehicleObj.optString("grossWeight"),
-			tareWeight = vehicleObj.optString("tareWeight"),
-			middleAluminumWeight = vehicleObj.optString("middleAluminumWeight"),
-			middleIronWeight = vehicleObj.optString("middleIronWeight"),
-			woodEstimate = vehicleObj.optString("woodEstimate"),
-			vehiclePlateNumber = vehicleObj.optString("vehiclePlateNumber"),
-			loadingDate = vehicleObj.optString("loadingDate")
-		)
+		currentLoadingTripName = targetTripName
 
+		if (targetTripName.isNotBlank()) {
+			val trip = loadingTripMap[targetTripName]
+			loadingAluminumRows.clear()
+			loadingAluminumRows.addAll(trip?.aluminumRows?.map { it.copy() } ?: emptyList())
+			loadingIronRows.clear()
+			loadingIronRows.addAll(trip?.ironRows?.map { it.copy() } ?: emptyList())
+			vehicleInfo = trip?.vehicleInfo?.copy() ?: VehicleInfo()
+			loadingAluminumWeightMode = trip?.aluminumWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
+			loadingIronWeightMode = trip?.ironWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
+		} else {
+			loadingAluminumRows.clear()
+			loadingIronRows.clear()
+			vehicleInfo = VehicleInfo()
+			loadingAluminumWeightMode = LoadingWeightMode.UNSELECTED
+			loadingIronWeightMode = LoadingWeightMode.UNSELECTED
+		}
 
-		loadingTripMap[tripName] = trip
-	}
-
-	val targetTripName = when {
-		restoredTripName.isNotBlank() && loadingTripMap.containsKey(restoredTripName) -> restoredTripName
-		loadingTripMap.isNotEmpty() -> loadingTripMap.keys.first()
-		else -> ""
-	}
-
-	currentLoadingTripName = targetTripName
-
-	if (targetTripName.isNotBlank()) {
-		val trip = loadingTripMap[targetTripName]
-		loadingAluminumRows.clear()
-		loadingAluminumRows.addAll(trip?.aluminumRows?.map { it.copy() } ?: emptyList())
-		loadingIronRows.clear()
-		loadingIronRows.addAll(trip?.ironRows?.map { it.copy() } ?: emptyList())
-		vehicleInfo = trip?.vehicleInfo?.copy() ?: VehicleInfo()
-		loadingAluminumWeightMode = trip?.aluminumWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
-		loadingIronWeightMode = trip?.ironWeightMode ?: LoadingWeightMode.SINGLE_PACKAGE
-	} else {
+		currentLoadingEditIndex = if (loadingAluminumRows.isEmpty()) -1 else 0
+	} catch (e: Exception) {
+		e.printStackTrace()
+		loadingTripMap.clear()
 		loadingAluminumRows.clear()
 		loadingIronRows.clear()
+		currentLoadingTripName = ""
 		vehicleInfo = VehicleInfo()
+		loadingAluminumUsePackageCount = false
 		loadingAluminumWeightMode = LoadingWeightMode.UNSELECTED
 		loadingIronWeightMode = LoadingWeightMode.UNSELECTED
+		currentLoadingEditType = ReturnLoadingType.ALUMINUM
+		currentLoadingEditIndex = -1
+		currentLoadingField = ReturnLoadingField.MATERIAL_NAME
+		if (currentBuildingName.isNotBlank()) {
+			buildingLoadingContentMap[currentBuildingName] = ""
+		}
 	}
-
-
-	currentLoadingEditType = ReturnLoadingType.ALUMINUM
-	currentLoadingEditIndex = if (loadingAluminumRows.isEmpty()) -1 else 0
-	currentLoadingField = ReturnLoadingField.MATERIAL_NAME
 }
 
 

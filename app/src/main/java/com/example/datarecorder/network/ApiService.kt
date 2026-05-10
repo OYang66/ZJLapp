@@ -3,6 +3,11 @@ package com.example.datarecorder.network
 import com.example.datarecorder.model.AccountStatusRequest
 import com.example.datarecorder.model.AccountStatusResponse
 import com.example.datarecorder.model.ApiResponse
+import com.example.datarecorder.model.AppConnectionCodeData
+import com.example.datarecorder.model.AppConnectionCodeRequest
+import com.example.datarecorder.model.AppPushReturnDataRequest
+import com.example.datarecorder.model.AppPushReturnDataResult
+import com.example.datarecorder.model.AppSubDisplayConnectionStatus
 import com.example.datarecorder.model.AppVersionInfo
 import com.example.datarecorder.model.LoginRequest
 import com.example.datarecorder.model.LoginResponse
@@ -82,4 +87,17 @@ interface ApiService {
 		suspend fun getServerProjectBuildings(
 				@retrofit2.http.Query("projectName") projectName: String
 		): ApiResponse<List<ServerBuildingItem>>
+
+		@POST("api/app/generate-code")
+		suspend fun generateSubDisplayCode(): ApiResponse<AppConnectionCodeData>
+
+		@POST("api/app/connection-status")
+		suspend fun getSubDisplayConnectionStatus(
+				@Body request: AppConnectionCodeRequest
+		): ApiResponse<AppSubDisplayConnectionStatus>
+
+		@POST("api/app/push-return-data")
+		suspend fun pushSubDisplayReturnData(
+				@Body request: AppPushReturnDataRequest
+		): ApiResponse<AppPushReturnDataResult>
 }

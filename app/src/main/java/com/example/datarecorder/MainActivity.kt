@@ -37,9 +37,11 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.datarecorder.model.AppSubDisplayDevice
 import com.example.datarecorder.network.RetrofitClient
 import com.iflytek.sparkchain.core.asr.ASR
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.poi.ss.util.CellRangeAddress
@@ -59,6 +61,16 @@ data class BackupItem(
 		val uri: Uri? = null,
 		val file: File? = null
 )
+
+private data class ProjectSaveSnapshot(
+			val projectId: Long,
+			val projectName: String,
+			val buildingName: String,
+			val standardContent: String,
+			val fastContent: String,
+			val loadingContent: String,
+			val qualityContent: String
+	)
 
 class MainActivity : AppCompatActivity() {
 
@@ -124,6 +136,7 @@ class MainActivity : AppCompatActivity() {
 	lateinit var appUpdateManager: AppUpdateManager
 	lateinit var tvProjectName: TextView
 	lateinit var btnModeToggle: Button
+		lateinit var btnConnectCode: Button
 	var currentBuildingName: String = ""
 	val packageDateMap = linkedMapOf<String, String>()
 	var pendingExportLoadingFileName: String? = null
@@ -200,7 +213,17 @@ class MainActivity : AppCompatActivity() {
 	var isFastMode = false
 	var currentProjectId: Long = 0L
 	var currentProjectName: String = "未选择"
+	var isSwitchingProject = false
 	var currentPackageName: String = ""
+		var subDisplayCurrentCode: String? = null
+		var subDisplayLastPayloadHash: String? = null
+		var subDisplayHasActiveReceiver = false
+		var subDisplaySessionCount = 0
+		var subDisplayDevices: List<AppSubDisplayDevice> = emptyList()
+		var subDisplayLastEventTime: String = ""
+		var subDisplayStatusSource: String = ""
+		var subDisplayPushJob: Job? = null
+		var subDisplayStatusJob: Job? = null
 
 	val packageStandardRowsMap = linkedMapOf<String, MutableList<StandardRow>>()
 	val packageCurrentStandardRowMap = linkedMapOf<String, StandardRow>()
@@ -362,6 +385,7 @@ class MainActivity : AppCompatActivity() {
 
 	private val ids = listOf(
 		R.id.btnModeToggle,
+			R.id.btnConnectCode,
 		R.id.btnProjectMenu,
 		R.id.btnPackageMenu,
 		R.id.btnMore,
@@ -400,6 +424,7 @@ class MainActivity : AppCompatActivity() {
 		appUpdateManager.onHostResume()
 		checkAccountStatusNow()
 		reportOnlineActive()
+		refreshSubDisplaySyncState(forceRestartPolling = true)
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -428,6 +453,7 @@ class MainActivity : AppCompatActivity() {
 		initLoadingModeArea()
 		updateAvatarView()
 		updatePackageButtonText()
+			restoreSubDisplayConnectionState()
 		initQualityModeArea()
 		initQualityInputButtons()
 		registerLogoutReceiver()
@@ -464,6 +490,7 @@ class MainActivity : AppCompatActivity() {
 		onlineActiveRunnable?.let {
 			handler.removeCallbacks(it)
 		}
+		stopSubDisplaySyncState(resetReceiverState = false)
 
 		runCatching {
 			saveCurrentProjectContent()
@@ -499,6 +526,7 @@ class MainActivity : AppCompatActivity() {
 	private fun initViews() {
 		tvProjectName = findViewById(R.id.tvProjectName)
 		btnModeToggle = findViewById(R.id.btnModeToggle)
+			btnConnectCode = findViewById(R.id.btnConnectCode)
 		loadingModeContainer = findViewById(R.id.loadingModeContainer)
 		loadingTable = findViewById(R.id.loadingTable)
 		tvLoadingIronWeighbridge = findViewById(R.id.tvLoadingIronWeighbridge)
@@ -603,6 +631,11 @@ class MainActivity : AppCompatActivity() {
 
 		btnModeToggle.setOnClickListener {
 			showModeSwitchMenu(it)
+			}
+
+			btnConnectCode.setOnClickListener {
+				requestGenerateConnectCode()
+				return@setOnClickListener
 		}
 	}
 
@@ -641,13 +674,26 @@ class MainActivity : AppCompatActivity() {
 			"1" -> "在线"
 			else -> "离线"
 		}
-		val lastActiveText = SessionManager.getLastActiveTime(this).ifBlank { "暂无" }
+		val subDisplayStatusText = when {
+			subDisplayCurrentCode.isNullOrBlank() -> "未生成连接码"
+			subDisplayHasActiveReceiver -> "已连接"
+			else -> "未连接"
+		}
+		val connectionCountText = "${subDisplaySessionCount}台"
 
 		showAccountCardPopup(
 			anchor = anchor,
 			username = username,
 			onlineText = onlineText,
-			lastActiveText = lastActiveText,
+			connectionCountText = connectionCountText,
+			subDisplayStatusText = subDisplayStatusText,
+			hasSubDisplayCode = hasValidSubDisplayCode(),
+			onSubDisplayCodeClick = {
+				showSubDisplayCodeDialog()
+			},
+			onViewDevicesClick = {
+				showSubDisplayDevicesDialog()
+			},
 			onOpenBackend = {
 				val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://yxff.work/"))
 				startActivity(intent)
@@ -1374,53 +1420,87 @@ class MainActivity : AppCompatActivity() {
 			restoreHistoryBackup(item)
 		}
 	}
-
-
-	fun MainActivity.snapshotCurrentProjectState() {
-		saveCurrentPackageToMemoryForSave()
-		saveCurrentBuildingScopeToMemory()
-	}
-
-	suspend fun MainActivity.saveCurrentProjectContentNow() {
-		if (currentProjectId <= 0L) return
-
-		snapshotCurrentProjectState()
-
-		repository.updateProject(
-			id = currentProjectId,
-			name = currentProjectName,
-			buildingName = currentBuildingName,
-			standardContent = serializeProjectStandardBuildingsContent(),
-			fastContent = serializeProjectFastBuildingsContent(),
-			loadingContent = serializeProjectLoadingBuildingsContent(),
-			qualityContent = serializeProjectQualityBuildingsContent()
-		)
-	}
-
-
-	fun triggerAutoSaveDebounced() {
-
-		autoSaveRunnable?.let {
-			handler.removeCallbacks(it)
+		fun MainActivity.snapshotCurrentProjectState() {
+			saveCurrentPackageToMemoryForSave()
+			saveCurrentBuildingScopeToMemory()
 		}
 
-		autoSaveRunnable = Runnable {
-			saveCurrentProjectContent()
+		fun MainActivity.cancelPendingAutoSave() {
+			autoSaveRunnable?.let {
+				handler.removeCallbacks(it)
+			}
+			autoSaveRunnable = null
 		}
 
-		handler.postDelayed(autoSaveRunnable!!, 1500)
-	}
+		private fun MainActivity.buildProjectSaveSnapshot(
+			expectedProjectId: Long,
+			allowDuringProjectSwitch: Boolean = false
+		): ProjectSaveSnapshot? {
+			if (expectedProjectId <= 0L) return null
+			if (currentProjectId != expectedProjectId) return null
+			if (isSwitchingProject && !allowDuringProjectSwitch) return null
 
-	fun MainActivity.saveCurrentProjectContent() {
-		if (currentProjectId <= 0L) return
+			snapshotCurrentProjectState()
 
-		lifecycleScope.launch(Dispatchers.IO) {
-			saveCurrentProjectContentNow()
+			return ProjectSaveSnapshot(
+				projectId = expectedProjectId,
+				projectName = currentProjectName,
+				buildingName = currentBuildingName,
+				standardContent = serializeProjectStandardBuildingsContent(),
+				fastContent = serializeProjectFastBuildingsContent(),
+				loadingContent = serializeProjectLoadingBuildingsContent(),
+				qualityContent = serializeProjectQualityBuildingsContent()
+			)
 		}
-	}
+
+		suspend fun MainActivity.saveCurrentProjectContentNow(
+			expectedProjectId: Long = currentProjectId,
+			allowDuringProjectSwitch: Boolean = false
+		) {
+			val snapshot = withContext(Dispatchers.Main.immediate) {
+				buildProjectSaveSnapshot(expectedProjectId, allowDuringProjectSwitch)
+			} ?: return
+
+			withContext(Dispatchers.IO) {
+				repository.updateProject(
+					id = snapshot.projectId,
+					name = snapshot.projectName,
+					buildingName = snapshot.buildingName,
+					standardContent = snapshot.standardContent,
+					fastContent = snapshot.fastContent,
+					loadingContent = snapshot.loadingContent,
+					qualityContent = snapshot.qualityContent
+				)
+			}
+		}
 
 
-	fun saveCurrentPackageToMemoryForSave() {
+		fun triggerAutoSaveDebounced() {
+			triggerSubDisplaySnapshotDebounced()
+
+			val expectedProjectId = currentProjectId
+			cancelPendingAutoSave()
+
+			autoSaveRunnable = Runnable {
+				saveCurrentProjectContent(expectedProjectId)
+			}
+
+			handler.postDelayed(autoSaveRunnable!!, 1500)
+		}
+
+		fun MainActivity.saveCurrentProjectContent(expectedProjectId: Long = currentProjectId) {
+			if (expectedProjectId <= 0L) return
+
+			lifecycleScope.launch {
+				saveCurrentProjectContentNow(expectedProjectId)
+				if (!isSwitchingProject && currentProjectId == expectedProjectId) {
+					pushFastSnapshotIfNeeded()
+				}
+			}
+		}
+
+
+		fun saveCurrentPackageToMemoryForSave() {
 		saveScreenDataToCurrentPackage()
 	}
 
@@ -1433,16 +1513,30 @@ class MainActivity : AppCompatActivity() {
 		val lastProjectId = prefs.getLong("last_project_id", -1L)
 
 		val allProjects = withContext(Dispatchers.IO) { repository.getAllProjects() }
+		val preferredProject = allProjects.firstOrNull { it.id == lastProjectId }
+		val fallbackProjects = allProjects.filter { it.id != lastProjectId }
 
-		val target = allProjects.firstOrNull { it.id == lastProjectId } ?: allProjects.firstOrNull()
+		if (preferredProject != null) {
+			try {
+				switchProjectById(preferredProject.id)
+				return
+			} catch (e: Exception) {
+				e.printStackTrace()
+				prefs.edit().remove("last_project_id").apply()
+			}
+		}
 
-		if (target != null) {
-			switchProjectById(target.id)
-			return
+		for (project in fallbackProjects) {
+			try {
+				switchProjectById(project.id)
+				return
+			} catch (e: Exception) {
+				e.printStackTrace()
+			}
 		}
 
 		val newId = withContext(Dispatchers.IO) {
-			repository.createProject("默认项目", "1#")
+			repository.createProject("默认项目", "1号楼")
 		}
 
 		switchProjectById(newId)

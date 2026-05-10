@@ -135,6 +135,21 @@
             android:textStyle="bold" />
 
         <Button
+            android:id="@+id/btnConnectCode"
+            android:layout_width="96dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_purple_button"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="生成连接码"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnModeToggle"
             android:layout_width="86dp"
             android:layout_height="30dp"
